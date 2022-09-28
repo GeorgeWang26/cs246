@@ -14,7 +14,7 @@ int main() {
 ## Compiling C++ program
 ```
 g++ -std=c++14 -Wall -g program.cc -o myprogram
-g14 program.cc -o myprogram  # if g14 is alaised 
+g++14 program.cc -o myprogram  # if g14 is alaised 
 
 -Wall: warning
 -g: debugging information
@@ -364,9 +364,9 @@ Things you **CANNOT** do with lvalue references:
 
 What **CAN** you do?
 - pass as function params
-    - `void inc (int &n) {++n;}
-    - `int &n`: const ptr to the argument x, changes to n affect x
-    - `++n;`: no ptr dereference needed
+    - `void inc (int &n) {++n;}`
+        - `int &n`: const ptr to the argument x, changes to n affect x
+        - `++n;`: no ptr dereference needed
 
 ``` c++
 int x = 5;
