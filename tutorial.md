@@ -71,6 +71,11 @@ echo ${x%name}  # this prints thisismy
 * `$@` : list of arguments supplied to current script (not including `$0`)
 * `$?` : return exit code of most recent command/function/program
 
+Note:
+* `$()` Command substitution
+* `${}` Parameter/variable substitution
+  * `${VAR}` and `$VAR` behave the same in most case, but have some [subtle differences](https://stackoverflow.com/questions/18135451/what-is-the-difference-between-var-var-and-var-in-the-bash-shell)
+  * prefer `${VAR}` because it can be used in more scenarios!!!
 
 ## Subroutines/functions in Bash
 * mini bash scripts within a bash script, a series of command that can be called

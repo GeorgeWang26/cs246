@@ -150,6 +150,9 @@ What if we want the spaces? Use `getline(cin, s);`
 
 ## Stream abstraction
 Streams abstraction applies to other sources of data
+
+Stream is like a queue, first in first out, so if a general stream is defined (can both write to << and read from >>), then which ever was written first will be read first.
+
 ### File as stream
 Read from a file instead of from stdin, `#include <fstream>`
 - `std::ifstream` - file for reading
@@ -259,11 +262,15 @@ in C++: Fucntions with different param lists can share the same name
 ``` c++
 int neg(int n) {return -n;}
 bool neg (bool b) {return !b;}
+
+// different args order
+void foo (int a, double b);
+void foo (double b, int a);
 ```
 
 correct version of neg, for each function call is chosen by the compiler (ie: at compile time), based on the number & types of the args in the function call
 
-Overloads must differ in number OR types of args. Just differing in the return type is NOT enough.
+Overloads must differ in number OR types of args OR order of args. Just differing in the return type is NOT enough.  
 
 We've seen this already: 
 - `>>`, `<<` are overloaded
@@ -289,6 +296,19 @@ struct Node {
 };
 ```
 
+Ways to initialize/define struct in C++14  
+Lines that are commented out are invalid. (this is asked on piazza, update answers here)
+``` c++
+Vec a = {1, 2};
+// Vec b = (1, 2);
+Vec c {1, 2};
+// Vec d (1, 2);
+Vec e = a;
+Vec f {a};
+Vec g (a);
+Vec h = {a};
+Vec i = (a);
+```
 
 ## Constants
 ``` c++
@@ -345,7 +365,8 @@ z = 12;  // NOT "*z = 12;"
 // now y == 12
 int *p = &z;  // gives the address of y
 ```
-References are like const ptrs with automatic dereferencing.  
+References are *like* const ptrs with automatic dereferencing.  
+But references are **NOT** ptr. sizeof(reference) gives the size of the referenced object, instead of always 8, which is the size of a ptr.
 - in all cases, z behaves exactly like y  
 - z is an *alias* (another name) for y  
 
@@ -359,13 +380,13 @@ Things you **CANNOT** do with lvalue references:
     - reference to ptr is OK
         - `int *&x = ...;` (x is a reference to a ptr to an int)
 - create a reference to a reference, ~~`int &&r = ...;`~~
-    - this will compile but means something different (later)
+    - this will compile but means something different (rvalue reference)
 - create an array of references, ~~`int &r[3] = {..., ..., ...};`~~
 
 What **CAN** you do?
 - pass as function params
     - `void inc (int &n) {++n;}`
-        - `int &n`: const ptr to the argument x, changes to n affect x
+        - `int &n`: like const ptr to the argument x, changes to n affect x
         - `++n;`: no ptr dereference needed
 
 ``` c++
@@ -377,7 +398,7 @@ cout << x;  // 6
 
 Why does `cin >> x` work? It takes x by reference!
 
-Function declaration of operator `>>` when reading int, takes n as reference. Cannot pass streams by value, always pass their reference (const ptr)
+Function declaration of operator `>>` when reading int, takes n as reference. Cannot pass streams by value, always pass their reference (like const ptr)
 ``` c++
 istream &operator >> (istream &int, int &n);
 ```
@@ -435,3 +456,406 @@ Node *np = new Node;
 ...
 delete np;
 ```
+
+# Lecture 7
+
+## Dynamic memory allocation ctd.
+- all local variables reside on the stack
+    - vars deallocated when they go out of scope (stack is popped)
+- allocated memory (ie: the result of `new`) resides on the heap
+    - remain allocated until `delete` is called
+    - if you don't delete all allocated memory, it causes *memory leak* (this happend when function ends without returning allocated object)
+        - program will eventually fail
+        - we regard this as an incorrect program
+
+Array on the heap:
+``` c++
+Node *nodeArray = new Node[10];
+...
+delete[] nodeArray;
+```
+Memory allocated with `new` must be freed with `delete`  
+Memory allocated with `new type[size]` must be freed with `delete[]`  
+Mixing these result in undefined bahaviour
+
+## Return by value/ptr/ref
+``` c++
+// expensive - n is coped to the caller's stack frame on return
+Node getMeANode() {
+    Node n;
+    return n;
+}
+```
+
+return a ptr (or ref) insted?
+
+``` c++
+// BAD
+// returns a ptr to stack-allocated data, which is dead on return
+Node *getMeANode() {
+    Node n;
+    return &n;
+}
+
+// also BAD, for same reason
+Node &getMeANode() {
+    Node n;
+    return n;
+}
+```
+
+``` c++
+// OK
+// return a ptr to heap data, still alive
+// But don't forget to delete it when done with it
+Node *getMeANode() {
+    return new Node;
+}
+```
+
+Which should you pick? Return by value. Not as expensive as it looks. (we'll find out why later)
+
+
+## Operator overloading
+Give meanings to C++ operators for our own types
+``` c++
+struct Vec {
+    int x, y;
+};
+
+Vec operator+(const Vec &v1, const Vec &v2) {
+    Vec v {v1.x + v2.x, v1.y + v2.y};
+    return v;
+}
+
+Vec operator*(const int k, const Vec &v) {
+    // OK, because the compiler knows it's a Vec, based on the return type.
+    return {k * v.x, k * v.y};
+}
+
+Vec operator*(const Vec &v, const int k) {
+    return k * v;
+}
+```
+
+### Special cases: overloading << and >>
+ostream type include cout, cerr, ofstream, ostringstream, ...  
+istream type include cin, ifstream, istringstream, ...
+``` c++
+struct Grade {
+    int theGrade;
+};
+
+ostream &operator<<(ostream &out, const Grade &g) {
+    out << g.theGrade << '%';
+    return out;
+}
+
+istream &operator>>(istream &in, Grade &g) {
+    in >> g.theGrade;
+    if (g.theGrade < 0) g.theGrade = 0;
+    if (g.theGrade > 100) g.theGrade = 100;
+    return in;
+}
+```
+
+## The preprocessor
+Transforms the program before compiler sees it  
+`#___`, pre processor directive (eg: `#include`)  
+
+Including old C headers - new naming convention  
+instead of `#inclyde <stdio.h>`, now `#include <cstdio>`
+
+`define Var VALUE` sets a preprocessor variable, then all occurences of VAR in the source file are replaced with VALUE
+
+``` c++
+#define MAX 10
+// transformed to "int x[10];"
+int x [MAX];
+```
+use const definitions instead
+
+``` c++
+// sets variable FLAG, value is the empty string
+#define FLAG
+```
+
+Defined constant useful for conditional compilation
+``` c++
+#define SECURITYLEVEL 1    (or 2)
+#if SECURITYLEVEL == 1
+    short int  // removed before compiler sees it if securitylevel != 1
+#elif SECURITYLEVEL == 2
+    long long int  // removed before compiler sees it if securitylevel != 2
+#endif
+    // type of varaible is defined based on #if
+    // this is not possible with regular if-else
+    publickey;
+```
+
+Special case:
+``` c++
+// never true, all inner text suppressed
+// heavy duty "comment out"
+// #if nests properly
+#if 0
+    ...
+#endif
+```
+
+Can also define symbols via compiler arguments `g++ -DX=15`
+``` c++
+int main() {
+    cout << X << endl;>>>>
+}
+```
+
+`#ifdef NAME`, `#ifndef NAME`, true if the preprocessor variable NAME (has/has not) been defined
+
+``` c++
+int main() {
+    #ifdef DEBUG
+        cerr << "setting x=1\n";
+    #endif
+    int x = 1;
+    while (x < 10) {
+        ++x;
+        #ifdef DEBUG
+            cerr << "x is now" << x << endl;
+        ##endif
+    }
+    cout << x << endl;
+}
+```
+
+
+## Separate compilation
+Split program into composable modules, which each provide
+- **interface (.h files)**: type definitions, function headers
+- **implementation (.cc file)**: full definitions for every provided function
+
+
+
+# Lecture 8
+
+## Separate compilation
+Recall: interface + implementation
+
+Note: 
+- declaration: asserts existence, `int f(int x);`
+- definition: full details, allocates space `int f(int x) {...}`
+
+interface (vec.h)
+``` c++
+struct Vec {
+    int x, y;
+}
+Vec operator+(const Vec & v1, const Vec & v2);
+```
+
+implementation (vec.cc)  
+Recall: an entity can be declared many times, but defined only once.
+``` c++
+#include "vec.h"
+
+Vec operator+(const Vec & v1, const Vec & v2) {
+    return {v1.x + v2.x, v1.y + v2.y};
+}
+```
+
+main.cc
+``` c++
+#include "vec.h"
+
+int main() {
+    Vec v{1, 2};
+    v = v + v;
+    ...
+}
+```
+
+compiling separately  
+Note: .h file is not compiled by itself
+``` bash
+# -c: compile only, do not link, do not build executable
+# produces object file (.o)
+g++14 -c vec.cc
+g++14 -c main.cc
+# links oject files into executable
+g++14 main.o vec.o -o main
+./main
+```
+
+What happens if we change vec.cc?  
+Only need to recompile vec.cc and relink (fast). Instead of compiling everything together (slow for large project)
+
+What happens if we change vec.h?  
+Need to recompile **both** vec.cc and main.cc (they both include vec.h), then relink  
+
+### make
+How can we keep track of dependencies and perform minimal recompilation?  
+Linux tool: `make`
+
+Create a `Makefile` that says which files depend on which other files:  
+**NOTE:** Makefile does NOT recognize alias (eg: c++14)
+``` makefile
+# main: target
+# main.o, vec.o: dependencies, main depends on these
+main: main.o vec.o
+    # recipe for building target from dependencies
+    # must have one TAB for indent
+    g++ main.o vec.o -o main
+
+main.o: main.cc vec.h
+    g++ -std=c++14 -c main.cc
+
+vec.o: vec.cc vec.h
+    g++ -std=c++14 -c vec.cc
+
+# optional target
+.PHONY: clean
+clean: rm *.o main
+```
+Then from terminal: `make`. This build the whole project
+
+Now change just vec.cc, then make
+- compiles vec.cc only, *NOT* the whole project
+- relinks
+
+Command
+- `make target` - builds the requested target. eg: `make clean`
+- `make`, no target specified => build the first target
+
+`make`
+- builds main
+    - What does main depend on?
+        - recursively build the dependencies if necessary
+- if a target is older than it's dependencies, it is rebuilt
+
+ex: vec.cc changes
+- newer than vec.o
+- rebuild vec.o, now it's newer than main
+- rebuild main
+
+Add some variables:
+``` makefile
+CXX = g++ (compiler's name)
+CXXFLAGS = -std=c++14 -Wall -g (compiler options)
+OBJECTS = main.o vec.o
+EXEC = main
+
+${EXEC}: ${OBJECTS}
+    ${CXX} ${OBJECTS} -o ${EXEC}
+
+# Make "guesses" the right recipe
+main.o: main.cc vec.h
+
+vec.o: vec.cc vec.h
+
+.PHONY: clean
+
+clean:
+    rm ${OBJECTS} ${EXEC}
+```
+
+**Biggest problem with writting Makefiles**
+- writting dependencies & keeping them up to date
+
+Can get help from g++ `g++ -MMD main.cc`
+- creates main.o and main.d
+
+contents in main.d
+```
+main.o: main.cc vec.h
+```
+Now just include whis into Makefile
+
+``` makefile
+CXX = g++ (compiler's name)
+CXXFLAGS = -std=c++14 -Wall -g -MMD(compiler options)
+OBJECTS = main.o vec.o  # depend on current project
+EXEC = main  # depend on current project
+DEPENDS = ${OBJECTS: .o = .d}
+
+${EXEC}: ${OBJECTS}
+    ${CXX} ${OBJECTS} -o ${EXEC}
+
+-include  ${DEPENDS}
+
+.PHONY: clean
+
+clean:
+    rm ${OBJECTS} ${EXEC}
+```
+
+As the project grows, only have to add .o files to the Makefile
+
+### Global variable
+What if we want a module to provide a global variable?  
+abc.h
+``` c++
+// declaration AND definition
+int globalNum;
+```
+Every file that includes abc.h will defines a separate globalNum
+- program will NOT link
+
+Solution: put the variable in a .cc  
+abc.h
+``` c++
+// declaration, but NOT definition
+extern int globalNum;
+```
+
+abc.cc
+``` c++
+// this is definition
+int globalNum;
+```
+
+Suppose we write a linear algebra module:  
+linalg.h
+``` c++
+#include "vec.h"
+...
+```
+
+linalg.cc
+``` c++
+#include "linalg.h"
+#include "vec.h"
+...
+```
+
+main.cc
+``` c++
+#include "linalg.h"
+#include "vec.h"
+```
+
+Won't compile  
+linalg.h include vec.h, and in both linalg.cc and main.cc, vec.h is included again. So struct Vec is defined multiple time (twice). This is NOT allowed
+
+Need to prevent files from being included more than once  
+solution: `#include guard`
+
+vec.h
+``` c++
+#ifndef VEC_H
+#define VEC_H
+// regular file contents
+...
+#endif
+```
+
+First time vec.h is included, the symbol VEC_H is not defined, so file is included.  
+Subsequently when vec.h is included again, VEC_H is already defined, so contents of vec.h are suppressed
+
+***Always*** put `#include guards` in .h files  
+
+***Never*** 
+- put `using namespace std;` in .h files
+    - The `using` directive will be forced upon any client who includes the file
+- compile .h files
+- include .cc files
+    - will cause repeated definition
