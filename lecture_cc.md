@@ -398,9 +398,9 @@ cout << x;  // 6
 
 Why does `cin >> x` work? It takes x by reference!
 
-Function declaration of operator `>>` when reading int, takes n as reference. Cannot pass streams by value, always pass their reference (like const ptr)
+Function declaration of operator `>>` when reading int, takes in as reference. Cannot pass streams by value, always pass their reference (like const ptr)
 ``` c++
-istream &operator >> (istream &int, int &n);
+istream & operator>> (istream &in, int &n);
 ```
 
 Pass by value: `void f(int n)` copies the argument
@@ -857,5 +857,661 @@ Subsequently when vec.h is included again, VEC_H is already defined, so contents
 - put `using namespace std;` in .h files
     - The `using` directive will be forced upon any client who includes the file
 - compile .h files
-- include .cc files
+- `#include` .cc files
     - will cause repeated definition
+
+
+
+
+# Lecture 9
+## Classes
+Can put functions inside of structs  
+student.h
+``` c++
+struct Student {
+    int assns, mt, final;
+    float grade;
+};
+```
+
+student.cc
+``` c++
+#include "student.h"
+// :: used when thing on left is class or namespace
+float Student::grade() {
+    return assns * 0.4 + mt * 0.2 + final * 0.4;
+}
+
+// client
+// Student is the class, s is the object
+Student s{60, 70, 80};
+// s is the receiver object
+cout << s.grade();
+```
+
+**Class** 
+- essentially a structure type that can contain functions
+- C++ does have a `class` keyword (will cover later)
+
+**Object**
+- instance of a class
+
+**function in grade**
+- called a member function (or method)
+
+**::**
+- called the scope resolution operator
+- C::f means f in the context of class C
+- :: is like . where the LHS is a class (or namespace) not an object
+
+What do assns, mt, final mean in side of Student::grade?
+- they are fields of the receier object, the object upon which grade was called
+
+``` c++
+Student s {...};
+// uses s's assns, mt, final
+s.grade();
+```
+
+Formally: methods (class functon) take a hidden extra param called `this`, which is a ptr to the reciever object
+
+``` c++
+s.grade();
+// secretly takes in this = &s (is a pointer)
+// but this cannot be passed explicitly
+// nor can have this as an argument name
+
+// can write
+struct Student {
+    ...
+    // method defined inside struct def, instead of with :: from outside
+    // Method body can be written within the class
+    // will do this in class for brevity
+    // should put bodies in .cc files
+    // So only put initialization in struct in .h
+    float grade() {
+        return this->assns * 0.4 + this->mt * 0.2 + this->final * 0.4;
+    }
+};
+```
+
+## Initializing Ojects
+`Student s {60, 70, 80};` OK, but limited
+
+Better solution
+- write a method that initializes a constructor (abbreviated as ctor)
+
+``` c++
+struct Student {
+    int assns, mt, final;
+    float grade();
+    // no return type, ctor always return the type of struct (ie: struct Student)
+    Student(int assns, int mt, int final);
+};
+
+Student::student(int assns, int mt, int final) {
+    this->assns = assns;
+    this->mt = mt;
+    this->final = final;
+}
+
+Student s {60, 70, 80};
+// this is better even tho have same syntax
+// if a ctor has been defined, the parameters are passed as args to the ctor
+// and C-style struct initialization is no longer available
+
+// OR
+Student s = Student {60, 70, 80};
+
+// Heal allocation
+Student *p = new Student {60, 70, 80};
+```
+
+Advantages of ctors:
+- default params, overloading, sanity checks
+
+``` c++
+struct Student {
+    ...
+    Student (int assns = 0, int mt = 0, int final = 0) {
+        this->assns = assns;
+    }
+};
+
+Student s2 {70, 80};  // 70, 80, 0
+Student s3;  // 0, 0, 0
+
+// this is still valid, but OLD C++
+Student s4 (10, 20);
+// could even do 
+int x {5};
+```
+
+**Note:** Every class comes with a default ctor (ctor with no agrs). It just default-constructs all fields that are OBJECTS (so int fields will be arbitrary).
+
+``` c++
+Vec v;  //default ctor (does nothing in this case)
+// If Vec is a field in Student
+Student s;
+// If Student is a field in Vec
+Vec v;
+// Both will get Vec fields (int x, y) unknown
+// and Student fields set to 0
+```
+
+But the built-in default ctor goes away if you write **any** ctor
+``` c++
+struct Vec {
+    int x, y;
+    Vec(int x, int y) {this->x = x; this->y = y;}
+};
+Vec v{1, 2};  // OK
+Vec w;  // won't compile, cuz there is NO default ctor anymore
+```
+
+What if a class contains constants or refs?
+Must be initialized
+``` c++
+struct MyStruct {
+    // WONT COMPILE
+    const int myConst;
+    int & myRef;
+};
+```
+
+``` c++
+int z;
+struct MyStruct {
+    // will compile but is not good
+    const int myConst = 5;
+    int & myRef = z;
+};
+```
+Does every instance of MyStruct need the same myConst?  
+Probably not.
+
+``` c++
+struct Student {
+    const int id;  // constant, but not the same for all students
+    ...
+}
+```
+
+Where do we initialize? Ctor body?  
+ctor is too late, fields must be fully constructed by then.
+
+What happens when an object is created?
+1. Spaceis is allocated
+2. fields are constructed in declaration order (ctors run for fields that are **objects**, so not int/double...)
+3. ctor body runs
+
+Need to put const initialization in 2)  
+How? Member Initialization List (MIL)
+
+``` c++
+Student::Student(int id, int assns, int mt, int final) : id {id}, assns {assns}, mt {mt}, final {final}
+{
+// ctor body
+}
+
+// in MIL, the syntax is fields {parameter}
+// if MIL present, then "this->fields = parameter;" is not needed
+```
+**Note:**
+- can initialize any field this way, not just consts or refs
+- Fields are always constructed in declaration order, even if the MIL orders them differently
+
+MIL
+- somtimes more efficient than setting fields in the body (otherwise, run default ctor in step2, then reassign in step3)
+- this won't be affecting primitive data types (int, double, bool, ...), since they are NOT objects, they don't have default ctor
+
+``` c++
+struct Student {
+    string name;
+};
+```
+
+What if a field is initialized inline AND in the MIL?
+``` c++
+struct Vec {
+    int x = 0, y = 0;
+    Vec(int x) : x {x} {}
+    // MIL takes precedence (field is not initialized twice)
+};
+```
+
+Now consider
+``` c++
+Student s {60, 70, 80};
+Student t = s;
+```
+- How does this initialization happen?
+- the "copy constructor"
+- for constructing one object as a copy of another
+
+**Note:** Every class comes with 
+- default ctor (lost if you write any ctor)
+- copy ctor
+- copy assignment operator
+- destructor
+- more constructor
+- move assignment operator
+
+Building your own copy ctor:
+``` c++
+struct Student {
+    int assns, mt, final;
+    ...
+    // this is equivalent to built in copy ctor
+    Student (const Student & other) : 
+        assns {other.assns},
+        mt {other.mt},
+        final {other.final}
+    {}
+};
+```
+
+When is the built-in copy ctor not correct?
+
+
+# Lecture 10
+
+Consider
+``` c++
+struct Node {
+    int data;
+    Node *next;
+};
+
+Node *n = new Node {1, new Node {2, new Node {3, nullptr}}};
+// both these are copy ctor
+Node m = *n;
+Node *p = new Node {*n};
+```
+
+In the memory:
+- n is in stack, point to Node 1 in heap
+- m is in stack is Node 1, which point to Node 2 in heap
+- p is in stack, point to a different Node 1 in heap, that point to Node 2 in heap
+
+Simply copy of fields => only the first node is actually copied (shallow copy)  
+If you want a **deep copy** (copits the whole list) must write your own copy ctor
+
+``` c++
+Node::Node(const Node & other) :
+    data {other.data},
+    next {other.next ? new Node {*other.next} : nullptr}
+{}
+
+// new Node {*other.next}
+// copy ctor call => recursion, copies the rest of the list
+```
+
+The copy ctor is called
+1. When an object is initialized by another object of the same type
+2. When an object is passed by value
+3. When an object is returned by a function
+
+This is true for now, more details soon
+
+Note: be careful with ctors that can take **one** parameter
+
+``` c++
+Struct Node {
+    ...
+    Node (int data, Node *next = nullptr);
+};
+```
+
+Single-arg ctors crate implicit conversions:
+``` c++
+Node n {4};
+// But also
+Node n = 4;  // implicit conversion from int to Node
+
+// implicit conversion from c-string (const char *) to cpp-string (string)
+string s = "Hello";
+
+
+// Problem arises with
+void f(Node n);
+f(4);  // OK
+// Takes away the compiler's ability to distinguish between int and Node
+// therfore takes away its ability to tell you you've done something wrong
+```
+
+Disable the implicit conversion - makes the ctor explicit
+``` c++
+struct Node {
+    ...
+    explicit Node(int data, Node *next = nullptr);
+};
+
+Node n {4}; // OK
+Node n = 4;  // won't compile
+f(4);  // won't compile
+f(Node {4});  // OK
+```
+
+
+
+
+
+# WTF???????? WHY IS SINGLEARG CTOR NOT MEANT TO BE NODE?
+
+
+
+
+
+
+
+## Destructors
+When an object is destroyed (stack: goes out of scope, heap: is deleted), a method called the destructor runs
+
+When an object is destroyed:
+1. dtor body runs
+2. fields are destructed (ie: dtors are invoked for fields tht are objects) in reverse-declaration order (bottom up)
+3. space deallocated
+
+Built-in dtor => calls dtors for all fields that are objects
+
+When do we need to write a dtor?
+
+``` c++
+Node *np = new Node {1, new Node {2, new Node {3, nullptr}}};
+// If np goes out of scope
+//      - the ptr is reclaimed (stack-allocated)
+//      - the list is leaked
+// If we say delete np
+//      - calles *np's dtor, which does nothing.
+//          First Node is freed, the rest of the list are leaked
+```
+
+Write a dtor to ensure the whole list is freed
+``` c++
+struct Node {
+    ...
+    ~Node() {
+        delete next;
+        // delete triggers dtor
+        // recursively calls *next's dtor, so whole list is freed
+
+        // delete nullptr is perfectly fine, safe, guranteed to do nothing
+    }
+};
+
+Node *np = new Node {1, new Node {2, new Node {3, nullptr}}};
+delete np;
+// now this frees the whole list
+```
+
+## Copy assignment operator
+``` c++
+Student s {60, 70, 80};
+Student s2 = s;  // copy ctor
+Student s3;  // default ctor
+
+// copy assignment operator - uses compiler-supplied default
+s3 = s2;  // copy, but not a construction
+```
+
+May need to write your own:
+``` c++
+struct Node {
+    ...
+    // return type is Node& so that cascading works
+    // ie: a = b = c = 4
+    // NO MIL, cuz this is NOT ctor
+
+    Node & operator=(const Node &other) {  // Dangerous
+        data = other.data;
+        // delete not needed for copy ctor
+        // for copy assignment, fields already have value and can cause leak
+        delete next;
+        next = other.next ? New node {*other.next} : nullptr;
+        return *this;
+    }
+
+    // Why dangerous?
+    Node n {1, new Node {2, new Node {3, nullptr}}};
+    n = n;
+    // deletes n & tries to copy n to n
+    // undefined behaviour
+}
+```
+
+When writting operator= ALWAYS be sure it works for self-assignment
+
+``` c++
+Struct Node {
+    ...
+    Node & operator=(const Node & other) {
+        if (this == &other) return *this;
+        // proceed as before
+    }
+};
+```
+
+Better  
+If `new` fails, Node will NOT have a corrupted `next` ptr
+``` c++
+Node & Node::operator=(const Node & other) {
+    if (this == &other) return *this;
+    Node *tmp = next;
+    next = other.next ? new Node {*other.next} : nullptr;
+    // if NEW fails, original list is still intact
+    data = other.data;
+    delete tmp;
+    return &this;
+}
+```
+
+# Lecture 11
+Continue from last example: NEW may fail if left over memory is not enough
+
+Alternative: copy & swap idiom
+``` c++
+#include <utility>
+struct Node {
+    ...
+    void swap(Node &other) {
+        using std::swap;
+        swap(data, other.data);
+        swap(next, other.next);
+    }
+    ...
+    // writting copy ASSIGNMENT operator
+    Node & operator= (const node &other) {
+        // this usescopy CONSTRUCTOR
+        Node tmp = other;
+        // will this create shallow or deep copy?
+        swap(tmp);
+        return *this;
+    }
+    ...
+};
+```
+
+
+## rvalues & rvalue reference
+Recall: 
+- An lvalue is anything with an address
+- An lvalue reference (&) is like a const ptr with auto dereferencing
+    - always initialized to an lvalue (unless is const &)
+
+Consider:
+``` c++
+Node plusOne(Node n) {
+    for (Node *p = n; p; p = o->next) {
+        ++ p->data;
+    }
+    return n;
+}
+Node n {1, new Node {2, nullptr}};
+Node n2 = plusOne(n);  // copy construction
+```
+- plusOne(n) is the "other" param in copy ctor def - reference to what?
+- compiler creates a temporary object to hold the result of plusOne
+- "other" in the copy ctor, is a ref to this temporary
+- copy ctor deep-copies the data from this temporary
+
+But
+- the temporary is going to be discarded anyway, as soon as the statement `Node n2 = plusOne(n);` is done
+- wasteful to have to copy data from the temp
+- why not just steall it instead?
+
+Node n2 = n;
+
+
+C++ - rvalue reference Node && is a reference to a temporary object of type Node - need to be able to tell whether "other" is a ref to a temporary object (rvalue) or a standalone obj (an lvalue)
+
+Version of the ctor that takes a Node&&  
+Move ctor
+``` c++
+struct Node {
+    ...
+    Node (Node &&other) : //called a move ctor (steal other's data)
+        data {oter.data},
+        next {other.next}
+    {
+        other.next = nullptr;
+    }
+
+}
+```
+
+Similarly
+``` c++
+Node m;
+m = plusOne(n);  // assignment from temporary (NOT CTOR)
+```
+
+Move assignment operator
+``` c++
+struct Node {
+    ...
+    Node & operator= (Node &&other) {
+        // steal other's data
+        // destroy my old
+        // easy: swap without copy
+        swap(other);
+        return *this;
+        // the temporary will be destroyed and take our old data with it
+    }
+}
+```
+
+## Copy/Move Elision
+``` c++
+Vec makeAVec() {
+    return {0, 0};  // invoke ordinary ctor
+}
+Vec v = makeAVec();  // what runs? copy ctor? move ctor?
+```
+
+Compiling above example in g++, ONLY et the ordinary ctor, no copy ctor, no move ctor.
+
+In some cases (which you don't need to know) the compiler is allowed to skip calling copy/move ctors (but doesn't have to)
+
+In this example: makeAVec writes its result ({0, 0}) directly into the sapce occupied by v in the caller, rather than copy it later.
+
+``` c++
+// pass-by-value copy/move ctor
+void f(Vec v);
+// result of makeAVec() written directly into the param
+// no copy or move
+f(makeAVec());
+```
+This is allowed, even if dropping ctor calls would change the behaviour of the program (ex: if the ctor print something)
+
+Only need to know that elision is possible. Don't need to know *when* it will run
+
+If you want all your ctors to run: `g++14 -fno-elite-constructors`. But this can slow down your program, by making a bunch of ctor calls that wasn't used before
+
+**In summary: Rule of 5 (Big 5)**  
+If need to write any one of the following, then usually need to write **all** 5
+1. copy ctor
+2. copy assignment
+3. move ctor
+4. move assignment
+5. destructor
+
+Notice: `operator=` member functuon, not a standalone function
+
+When an operator is declared as a member function, `this` plays the role of the first operand
+
+``` c++
+struct Vec {
+    int x, y;
+    ...
+    Vec operator+ (const Vec &other) {
+        return {x + other.x, y + other.y}
+    }
+
+    // member function
+    // v * k, since this(Vec itself) is always first argument
+    Vec operator* (const int k) {
+        return {x * k, y * k};
+    }
+}
+```
+
+How would we implement `k * v`?  
+Can't be a member func, first arg not Vec!  
+Must be standalone!
+
+``` c++
+Vec perator* (const int k, const Vec &v) {
+    return v * k;
+}
+```
+
+## I/O operators
+``` c++
+struct Vec {
+    ...
+    ostream & operator<< (ostream &out) {
+        return out << x << ' ' << y;
+    }
+};
+```
+Whats wrong with this? Makes vec the first operand, not the second. So it is used as v << cout, v << (w << cout)
+
+So define <<, >> as standalone
+
+Certain operators **MUST** be members:
+- operator=
+- operator[]
+- operator->
+- operator()
+- operator T      (where is T is a type, ie: "bool(stream)" will be defined as "operator bool")
+
+## Arrays of Objects
+``` c++
+struct Vec {
+    int x, y;
+    Vec (int x, int y) : x{x}, y{y} {};
+}
+// Error!
+// Both these want to call the default ctor on each item
+// If no default ctor is defined => can't initialize items => error
+Vec *p = new Vec[10];
+Vec arr[10];
+```
+
+Options:
+1. write a default ctor
+2. For stack arrays:  
+`Vec arr[3] = {{0, 0}, {1, 1}, {2, 4}};`
+3. For heap arrays:  
+create an array of ptrs  
+``` c++
+Vec **vp = new Vec*[5];
+vp[0] = new Vec {0, 0};
+vp[1] = new Vec {1, 1};
+...
+for (int i = 0; i < 5; i++) {
+    delete vp[i];
+}
+delete[] vp;
+```
