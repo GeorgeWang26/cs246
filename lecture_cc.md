@@ -1409,7 +1409,7 @@ Vec makeAVec() {
 Vec v = makeAVec();  // what runs? copy ctor? move ctor?
 ```
 
-Compiling above example in g++, ONLY et the ordinary ctor, no copy ctor, no move ctor.
+Compiling above example in g++, ONLY get the ordinary ctor, no copy ctor, no move ctor.
 
 In some cases (which you don't need to know) the compiler is allowed to skip calling copy/move ctors (but doesn't have to)
 
@@ -1515,3 +1515,245 @@ for (int i = 0; i < 5; i++) {
 }
 delete[] vp;
 ```
+
+
+# Lecture 12
+## Const objects
+`int f(const Node &n) {...}`  
+Const objects arise often, especially as params
+
+What is a const object?  
+Can't modify fields
+
+Can we call methods on a const object?  
+Issus: method may modify fields, which would violate const  
+Yes! We can call methods tht **promise** not to modify fields.
+
+### Const method
+``` c++
+struct Student {
+    int assns, mt, final;
+    // this method doesn't modify fields, so declare it const
+    float grade() const;
+};
+```
+Compiler checks that const methods don't modify fields. Only const methods can be called on const objects.
+
+### Mutable field
+Now consider: want to collect usage stats on student objects
+``` c++
+struct Student {
+    int assns, mt, final;
+    int numMethodCalls = 0;
+    float grade() const {
+        // will result compiling error
+        ++numMethodCalls;
+        return ...;
+    }
+};
+```
+
+Now can't call grade on const students  
+Mutating numMethodCalls affects only the physical constness of the object (whether the bit pattern has changed).  
+But **not** the logical constness (whether the obkect should still be considered the same)
+
+Want to be able to update numMethodCalls, even if the obj is const.  
+Declare the field `mutable`
+
+``` c++
+struct Student {
+    // can be changed, even if the obj is const
+    mutable int numMethodCalls = 0;
+    float grade() const {
+        ++numMethodCalls;
+        return ...;
+    }
+};
+```
+
+## Static fields & methods
+numMethodCalls tracked the number of times a method was called on a **particular** object.
+
+What if we want to track the number of times a method is called over **all** Student objects?
+
+Or what if we want to track how many students are created?
+
+**Static members** are associated with the class itself, not with any specific instance (object)
+
+constness 
+
+``` c++
+struct Student {
+    ...
+    static int numInstances;
+    // ctor
+    Student() : ... {
+        ++numInstances;
+    }
+};
+
+int Student::numInstances = 0;  // in a .cc file
+// static fields must be defined external to the class
+```
+
+global variables need to have extern to only have declaration and NOT definition
+
+static follow it's own rules
+
+
+int Student::numInstances = 0;  // in a .cc file
+CANT BE IN HEADER WITH INCLUDE GUARD
+INCLUDE GUARD ONLY PREVENT INCLUDE TWICE IN SAME FILE BUT ALLOWS INCLUDE IN DIFFERENT FILE (NOT WANTED WITH STATIC FIELD)
+
+
+### Static member functions
+- don't depend on the specific instance (no `this` as hidden first parameter)
+- can only access static fields & call other static methods
+
+``` c++
+struct Student {
+    ...
+    static int numInstances;
+    ...
+    static void howMany() {
+        cout << numInstances << end;
+    }
+};
+
+Student s1 {60, 70, 80}, s2 {70, 80, 90};
+
+Student::howMany();  // 2
+```
+
+Can access static fields & methods with class name directly `class::field` `class::method()`
+
+---
+midterm cutoff
+---
+
+
+## Invariants & Encapsulation
+Recall:
+``` c++
+struct Node {
+    int data;
+    Node *next;
+    ...
+    ~Node() {delete next;};
+};
+
+Node n1 {1, new Node {2, nullptr}};
+Node n2 {3, nullptr};
+// ERROR
+Node n3 {4, &n2};
+```
+
+What happens when these go out of scope?  
+- n1 - dtor runs, entire list is deleted. OK
+- n2, n3 - n3's dtor tries to delete n2, but n2 is on stack, not the heap! Undefined behaviour!
+
+Class Node relies on an assumption for its proper operation, that next is either nullptr or is allocated by new
+
+This assumption is an example of an **invariant** - statement that must hold true - upon which Node relies
+
+But we can't gurantee this invariant, because we can't trust the use to use Node properly
+
+Ex: stack provides an invariant
+- last item pushed is the first item popped
+- but not if the client can rearrange the underlying data
+
+Hard to reason about programs if you can't rely on invariants
+
+To enforce invariants, we introduce **encapsulation**
+- want clients to treat objects as black boxes (capsules)
+- creates an abstraction
+    - seal away implementation
+    - only interact via provided methods
+- regains control over our objects
+
+Ex:
+``` c++
+struct vec {
+    // default visibility is public
+    Vec(int x, int y);
+    
+    private:
+        // only accessible within vec
+        int x, y;
+    
+    public:
+        // anyone can access
+        Vec operator+ (const Vec &other);
+    ...
+};
+```
+
+In general: want private fields; only methods should be public
+
+Better to have default visibility be private, but we can't do that (c++ carry struct from c, where all struct attributes are public)
+
+Static also obey public/private visibility rules in struct
+
+
+## Class
+Switch from `struct` to `class`. Class have everything default to private
+``` c++
+class Vec {
+    int x, y;
+    
+    public:
+        Vec(int x, int y);
+        Vec operator+ (const Vec &other);
+};
+```
+
+Difference between struct & class is **default visibility**
+- public in struct
+- private in class
+
+Let's fix our linked list class
+
+list.h
+``` c++
+class List {
+    // private nested class List::Node
+    // not accessible outside List
+    struct Node;
+    Node *theList = nullptr;
+    int length = 0;
+
+    public:
+        void addToFront(int n) {
+        // obj.ith(5) = 10;
+        int &ith (int i);
+        ~List();
+    }
+};
+```
+
+list.cc
+``` c++
+#include "list.h"
+
+// nested class
+struct List::Node {
+    int data;
+    Node *next;
+    ...
+    ~Node() {delete next;}
+};
+
+void List::addToFront(int n) {
+    theList = new Node {n, theList};
+    ++length;
+}
+
+int &List::ith(int i) {
+    Node *cur = theList;
+    for (int n = 0; n < i; ++n) {
+        cur = cur->next;
+    }
+    return cur->data;
+}
+```
+# ASK SWAP
