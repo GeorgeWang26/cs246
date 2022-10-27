@@ -207,7 +207,7 @@ string intToString(int n) {
     return sock.str();
 }
 
-voic stringToInt(){
+void stringToInt(){
     int n;
     while (true) {
         cout << "Enter a numer " << endl;
@@ -288,7 +288,7 @@ struct Node {
 };  // don't forget the semicolon
 ```
 
-This is wrong, can't have struct in struct. Only struct pointer is allowed in struct.
+This is wrong, can't have Node struct in Node struct (recursive struct definition). Only Node struct pointer is allowed in Node struct.
 ``` c++
 struct Node {
     int data;
@@ -564,7 +564,7 @@ Transforms the program before compiler sees it
 `#___`, pre processor directive (eg: `#include`)  
 
 Including old C headers - new naming convention  
-instead of `#inclyde <stdio.h>`, now `#include <cstdio>`
+instead of `#include <stdio.h>`, now `#include <cstdio>`
 
 `define Var VALUE` sets a preprocessor variable, then all occurences of VAR in the source file are replaced with VALUE
 
@@ -622,7 +622,7 @@ int main() {
         ++x;
         #ifdef DEBUG
             cerr << "x is now" << x << endl;
-        ##endif
+        #endif
     }
     cout << x << endl;
 }
@@ -716,6 +716,9 @@ vec.o: vec.cc vec.h
 .PHONY: clean
 clean: rm *.o main
 ```
+
+[what is .PHONY?](https://stackoverflow.com/questions/2145590/what-is-the-purpose-of-phony-in-a-makefile#:~:text=In%20terms%20of%20Make%2C%20a,%2C%20TAGS%20%2C%20info%20%2C%20check%20.)
+
 Then from terminal: `make`. This build the whole project
 
 Now change just vec.cc, then make
@@ -787,6 +790,8 @@ ${EXEC}: ${OBJECTS}
 clean:
     rm ${OBJECTS} ${EXEC}
 ```
+
+use `-include` instead of only `include` to avoid error when running make for the first time (.d files may not be present)
 
 As the project grows, only have to add .o files to the Makefile
 
@@ -904,8 +909,8 @@ cout << s.grade();
 - C::f means f in the context of class C
 - :: is like . where the LHS is a class (or namespace) not an object
 
-What do assns, mt, final mean in side of Student::grade?
-- they are fields of the receier object, the object upon which grade was called
+What do assns, mt, final mean inside of Student::grade? (equivalent to this->assns)
+- they are fields of the receiver object, the object upon which grade was called
 
 ``` c++
 Student s {...};
@@ -913,13 +918,13 @@ Student s {...};
 s.grade();
 ```
 
-Formally: methods (class functon) take a hidden extra param called `this`, which is a ptr to the reciever object
+Formally: methods (**class functon**) take a hidden extra param called `this`, which is a ptr to the reciever object
 
 ``` c++
 s.grade();
 // secretly takes in this = &s (is a pointer)
-// but this cannot be passed explicitly
-// nor can have this as an argument name
+// but "this" cannot be passed explicitly
+// nor can have "this" as an argument name
 
 // can write
 struct Student {
@@ -963,7 +968,7 @@ Student s {60, 70, 80};
 // OR
 Student s = Student {60, 70, 80};
 
-// Heal allocation
+// Heap allocation
 Student *p = new Student {60, 70, 80};
 ```
 
@@ -1049,12 +1054,12 @@ Need to put const initialization in 2)
 How? Member Initialization List (MIL)
 
 ``` c++
-Student::Student(int id, int assns, int mt, int final) : id {id}, assns {assns}, mt {mt}, final {final}
+Student::Student(int id, int assns, int mt, int final) : id{id}, assns{assns}, mt{mt}, final{final}
 {
-// ctor body
+    // ctor body
 }
 
-// in MIL, the syntax is fields {parameter}
+// in MIL, the syntax is fields{parameter}
 // if MIL present, then "this->fields = parameter;" is not needed
 ```
 **Note:**
@@ -1062,8 +1067,8 @@ Student::Student(int id, int assns, int mt, int final) : id {id}, assns {assns},
 - Fields are always constructed in declaration order, even if the MIL orders them differently
 
 MIL
-- somtimes more efficient than setting fields in the body (otherwise, run default ctor in step2, then reassign in step3)
-- this won't be affecting primitive data types (int, double, bool, ...), since they are NOT objects, they don't have default ctor
+- somtimes more efficient than setting fields in the ctor body (otherwise, will run default ctor in step2, then reassign fields in step3)
+- this won't be affecting primitive data types (int, double, bool, ...), since they are NOT objects so they don't have default ctor
 
 ``` c++
 struct Student {
@@ -1075,7 +1080,7 @@ What if a field is initialized inline AND in the MIL?
 ``` c++
 struct Vec {
     int x = 0, y = 0;
-    Vec(int x) : x {x} {}
+    Vec(int x) : x{x} {...}
     // MIL takes precedence (field is not initialized twice)
 };
 ```
@@ -1094,7 +1099,7 @@ Student t = s;
 - copy ctor
 - copy assignment operator
 - destructor
-- more constructor
+- move constructor
 - move assignment operator
 
 Building your own copy ctor:
@@ -1104,9 +1109,9 @@ struct Student {
     ...
     // this is equivalent to built in copy ctor
     Student (const Student & other) : 
-        assns {other.assns},
-        mt {other.mt},
-        final {other.final}
+        assns{other.assns},
+        mt{other.mt},
+        final{other.final}
     {}
 };
 ```
@@ -1192,18 +1197,6 @@ Node n = 4;  // won't compile
 f(4);  // won't compile
 f(Node {4});  // OK
 ```
-
-
-
-
-
-# WTF???????? WHY IS SINGLEARG CTOR NOT MEANT TO BE NODE?
-
-
-
-
-
-
 
 ## Destructors
 When an object is destroyed (stack: goes out of scope, heap: is deleted), a method called the destructor runs
@@ -1302,7 +1295,7 @@ Node & Node::operator=(const Node & other) {
     // if NEW fails, original list is still intact
     data = other.data;
     delete tmp;
-    return &this;
+    return *this;
 }
 ```
 
@@ -1436,9 +1429,9 @@ If need to write any one of the following, then usually need to write **all** 5
 4. move assignment
 5. destructor
 
-Notice: `operator=` member functuon, not a standalone function
+Notice: `operator=` is a member functuon, not a standalone function
 
-When an operator is declared as a member function, `this` plays the role of the first operand
+When an ***operator*** is declared as a member function, `this` (the object itself) plays the role of the first operand
 
 ``` c++
 struct Vec {
@@ -1555,7 +1548,7 @@ struct Student {
 
 Now can't call grade on const students  
 Mutating numMethodCalls affects only the physical constness of the object (whether the bit pattern has changed).  
-But **not** the logical constness (whether the obkect should still be considered the same)
+But **not** the logical constness (whether the object should still be considered the same)
 
 Want to be able to update numMethodCalls, even if the obj is const.  
 Declare the field `mutable`
@@ -1596,14 +1589,16 @@ int Student::numInstances = 0;  // in a .cc file
 // static fields must be defined external to the class
 ```
 
-global variables need to have extern to only have declaration and NOT definition
+global variables need to have extern to only declare and NOT define
 
 static follow it's own rules
 
 
-int Student::numInstances = 0;  // in a .cc file
-CANT BE IN HEADER WITH INCLUDE GUARD
-INCLUDE GUARD ONLY PREVENT INCLUDE TWICE IN SAME FILE BUT ALLOWS INCLUDE IN DIFFERENT FILE (NOT WANTED WITH STATIC FIELD)
+static fields MUST be defined in **ONE AND ONLY ONE** .cc file
+
+static fields can't be defined in .h even with include guard, because include guard **ONLY** prevent the same .h from being included twice in the same .cc. However, include guard allows different files to include the same .h. This will cause the same static field to be defined multiple times in the program, and result in compiling error.
+
+This is similar to how global variable declaration in .h **MUST** use `extern`, so it doesn't get multiple definition. And write the definition in **ONLY ONE** .cc
 
 
 ### Static member functions
@@ -1616,7 +1611,7 @@ struct Student {
     static int numInstances;
     ...
     static void howMany() {
-        cout << numInstances << end;
+        cout << numInstances << endl;
     }
 };
 
@@ -1756,4 +1751,3 @@ int &List::ith(int i) {
     return cur->data;
 }
 ```
-# ASK SWAP
