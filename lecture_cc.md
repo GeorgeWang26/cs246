@@ -1335,7 +1335,7 @@ Recall:
 Consider:
 ``` c++
 Node plusOne(Node n) {
-    for (Node *p = n; p; p = o->next) {
+    for (Node *p = &n; p; p = o->next) {
         ++ p->data;
     }
     return n;
@@ -1751,3 +1751,252 @@ int &List::ith(int i) {
     return cur->data;
 }
 ```
+
+
+# Lecture 13
+Recall: Only list can create/manipulate Node objects. So we can gurantee the invariant that next is always nullptr or allocated by new.
+
+## Iterator Pattern
+- Bue for outside user (not in class) we can't traverse the list from node to node, as we would with a linked list (struct Node), because Node is not visible to outside user
+- Repeatedly calling ith to access the whole list will result in O(n^2) time
+- But we can't expose the nodes, or we lose encapsulation
+
+## SE Topic: Design Patterns
+kinda like case study
+- certain programming problems arise often
+- keep track of good solutions to these problems, so we can reuse & adapt them
+
+**Design Pattern** - if you have *this* problem, *this* technique might solve it  
+**Solution** - Iterator Pattern
+
+Create a class that manages access to nodes
+- abstraction of a ptr
+- walk the list without exposing the actual ptrs
+
+in C
+``` c
+for (int *p = arr; p != arr + size; ++p) {
+    printf("%d ", *p);
+}
+```
+
+in C++
+``` c++
+class List {
+    struct Node;
+    Node *theList = nullptr;
+    int length = 0;
+
+public:
+
+    class Iterator {
+        Node *p;
+    public:
+        // this is only for prefix ++
+        // operator++ (Iterator it) for postfix ++
+        Iterator & operator++ () {
+            p = p->next;
+            return *this;
+        }
+        
+        bool operator!= (Iterator other) const {
+            return p != other.p;
+        }
+
+        int & operator* () {
+            return p->data;
+        }
+    };
+
+    Iterator begin() {
+        return Iterator {theList};
+    }
+
+    Iterator end() {
+        return Iterator {nullptr};
+    }
+    ...
+};
+
+// client
+int main() {
+    List l;
+    l.addToFront(1);
+    l.addToFront(2);
+    l.addToFront(3);
+
+    for (List::Iterator it = l.begin(); it != l.end(); ++it) {
+        cout << *it << ' ';
+    }
+}
+```
+
+### Shortcut - automatic type deduction
+``` c++
+// Automatically gives x the same type as the value of y
+auto x = y;
+
+for (auto it = l.begin(); it != l.end(); ++it) {
+    cout << *it << ' ';
+}
+```
+
+### Shortercut - range-based for loop
+``` c++
+// n is a copy of item in iterator in this case
+// so mutate n will not affect the actual list
+for (auto n : l) {
+    cout << n << ' ';
+}
+```
+
+When can we use range iteration?  
+
+Available for any class with
+- methods begin() & end() that produce iterators
+- the iterator must support !=, prefix ++, unary * (dereference, not multiplication)
+
+Will revisit iterators later in the course
+
+If you want to modify the list elements (or save copying of each item)
+
+``` c++
+// n is a referenece to item in iterator
+// no more copying, and change to n affect actual list
+for (auto &n : l) {
+    ++n;
+}
+```
+
+### Encapsulation continued
+List client can create iterators directly
+
+``` c++
+auto it = List::Iterator {nullptr};
+```
+
+violates encapsulation - client should be using begin(), end()
+
+We could - make Iterator's ctor private
+- then client can't call `List::Iterator {...}`
+- but then neither can List
+
+Soln - give List privileged access to Iterator
+- make it a `friend`
+
+``` c++
+class List {
+    ...
+public:
+    class Iterator {
+        Node *p;
+        Iterator(Node *p) : p {p} {};
+        // friend can be defined in either private or public portion
+        // friend class List;
+    public:
+        ...
+        friend class List;  //List has access to all members of Iterator
+    }; 
+    ...
+};
+```
+
+Now List can still create iterators, but client can only call begin() & end()
+
+Give your classes as few friends as possible, because it weakens encapsulation
+
+Providing access to privae fields
+- acccess/mutator methods
+
+```c++
+class Vec {
+    int x, y;
+public:
+    ...
+    // accessor
+    int getX() const {
+        return x;
+    }
+
+    // mutator
+    void setY(int z) {
+        y = z;
+    }
+};
+```
+
+What about `operator<<`? Needs x, y but can't be a member function
+- if getX(), getY() defined. OK
+- if not, make `operator<<` a friend function
+
+.h
+``` c++
+class Vec {
+    ...
+    friend std::ostream & operator<< (std::ostream &out, const Vec &v);
+}
+```
+
+.cc
+``` c++
+ostream & operator<< (ostream &out, const Vec &v) {
+    out << v.x << ' ' << v.y;
+}
+```
+
+## SE Topic - System Modelling
+Visualize the structure of the system (abstraction & relationships among them) to aid design & implementation
+
+Popular Standard: UML (Unified Modelling Language)
+
+```
+-------------------
+|       Vec       |   Name
+-------------------
+| - x: Integer    |   Fields (optional)
+| - y: Integer    |
+-------------------
+| + getX: Integer |   Methods (optional)
+| + getY: Integer |
+-------------------
+
+
+Access: - private
+        + public
+```
+
+### Relationship: Composition of Classes
+``` c++
+class Vec {
+    int x, y;
+public:
+    Vec(int x, int y) : x{x}, y{y} {}
+};
+
+// Two Vecs define a basis
+
+class Basis {
+    Vec v1, v2;
+    ...
+};
+
+Basis b;  // ERROR - can't initialize v1, v2 - no default ctor for Vec
+```
+
+Instead use
+``` c++
+class Basis {
+    Vec v1, v2;
+public:
+    // initialize v1 to Vec {1, 0}
+    Basis() : v1 {1, 0}, v2 {0, 1} {}
+};
+```
+Embedding one object (Vec) inside another (Basis) is called **composition**
+
+Relationship: A Basis "owns a" Vec (in fact, it owns two of them)
+
+If A "owns a" B, then *typically*:
+- B has no identity outside A (no independent existence)
+- If A is destroyed, B is destroyed
+- If A is copied, B is copied (deep copy)
