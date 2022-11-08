@@ -742,8 +742,8 @@ ex: vec.cc changes
 
 Add some variables:
 ``` makefile
-CXX = g++ (compiler's name)
-CXXFLAGS = -std=c++14 -Wall -g (compiler options)
+CXX = g++  # compiler's name
+CXXFLAGS = -std=c++14 -Wall -g  # compiler options
 OBJECTS = main.o vec.o
 EXEC = main
 
@@ -774,11 +774,11 @@ main.o: main.cc vec.h
 Now just include whis into Makefile
 
 ``` makefile
-CXX = g++ (compiler's name)
-CXXFLAGS = -std=c++14 -Wall -g -MMD(compiler options)
+CXX = g++  # compiler's name
+CXXFLAGS = -std=c++14 -Wall -g -MMD  # compiler options
 OBJECTS = main.o vec.o  # depend on current project
 EXEC = main  # depend on current project
-DEPENDS = ${OBJECTS: .o = .d}
+DEPENDS = ${OBJECTS:.o=.d}
 
 ${EXEC}: ${OBJECTS}
     ${CXX} ${OBJECTS} -o ${EXEC}
@@ -1718,11 +1718,10 @@ class List {
     int length = 0;
 
     public:
-        void addToFront(int n) {
+        void addToFront(int n);
         // obj.ith(5) = 10;
         int &ith (int i);
         ~List();
-    }
 };
 ```
 
@@ -2000,3 +1999,531 @@ If A "owns a" B, then *typically*:
 - B has no identity outside A (no independent existence)
 - If A is destroyed, B is destroyed
 - If A is copied, B is copied (deep copy)
+
+
+# Lecture 14
+If A "owns a" B, mthen typically:
+- B has no identity outside of A (no independent existence)
+- If A is destroyed, B is destroyed
+- If A is copied, B is copied (deep copies)
+
+Eg: A car owns its engine. The engine is part of the car
+- destroy the car => destory the engine
+- copy the car => copy the engine
+
+Implementation - typically as composition of calsses
+
+UML Modelling: 
+```
+            eng
+car *------------>  engine
+             1
+```
+```
+A *-----> B
+```
+means A owns some number of B's
+- can annotate with multiplicities, field names
+
+
+## Aggregation
+Compare car parts in a car ("owns a") vs car parts in a catalogue.
+
+The catalogue contains the parts, but the parts have an independent existence "has a" relationship (aggregation)
+
+If A "has a" B, then typically
+- B exists appart from its association with A
+- If A is destoryed, B lives on
+- If A is copied, B is not (shallow copies)
+    - copies of A may share the same B
+
+Eg: parts in a catalogue, ducks in a pond
+
+UML:
+```
+Pond ---------------> Goose
+```
+
+Typical implementation: pointer fields
+``` c++
+class Pond {
+    Goose *geese[MaxGeese];
+};
+```
+
+## Specialization (Inheritance)
+Suppose you want to track your collection of books
+``` c++
+class Book {
+    string title, author;
+    int length;
+public:
+    Book(...);
+    ...    
+};
+```
+
+For textbooks, also want to know the topic
+``` c++
+class Tex {
+    string title, author;
+    int length;
+    string topic;
+public:
+    Text(...);
+    ...
+};
+```
+
+For comic books, want the name of the hero:
+```
+-------------------------
+|       Comic           |
+|-----------------------|
+|   - title: String     |
+|   - author: String    |
+|   - length: Integer   |
+|   - hero: String      |
+-------------------------
+```
+
+This is OK... But doesn't capture the relationships among Book, Text, Comic. And how do we create an array (or linked list) that contains a mixture of these?
+
+Before consider what C++ can offer, first look at what C can do:
+1. Use a `union`. Can hold ANY ONE AND ONLY ONE of the fields
+``` c
+union BookTypes {
+    Book *b;
+    Text *t;
+    Comic *c;
+};
+
+BookTypes myBooks[20];
+// problem: don't know which type is stored when reading from the list
+```
+2. Array of `void*`  
+Not good solutions - subvert the type system
+
+Rather observe: Texts & Comics are *kinds* of Books - bookswith extra features
+
+To model in C++ with **inheritance**
+
+``` c++
+// Base class OR Superclass
+class Book {
+    string title, author;
+    int length;
+    ...
+};
+
+// Derived classes OR Subclasses
+class Text : public Book {
+    string topic;
+    ...
+};
+
+// Derived classes OR Subclasses
+class Comic : public Book {
+    string hero;
+    ...
+};
+```
+
+Derived classes **inherit** fields & methods from the base class.
+
+So Text, Comic get title, author, length field. And any method that can be called on Book can be called on Text, Comic
+
+Q: Who has access to these fields?  
+title, author, length - private in books - outsiders can't use them.  
+
+Can Text, Comic access them?  
+***NO!*** even subclasses can't access them
+
+How do we initialize Text? Need (to initialize the Book part: title, author, length), topic
+
+``` c++
+class Text : public Book {
+    strng topic;
+public:
+    // WRONG
+    // This won't compile
+    Text(string title, string author, int length, string topic) :
+        title {title}, author {author}, length {length}, topic {topic}
+    {}
+};
+```
+
+Wrong because:
+1. title, author, length are NOT accessible in Text
+2. MIL only let you name your **own** fields (only topic)
+3. When an object is created:
+    1. Space is allocated
+    2. Superclass part is constructed **NEW**
+    3. Fields constructed
+    4. Ctor body
+
+And ii. doesn't work if Book has no default ctor.
+
+Fix: call a Book ctor in Text's MIL
+``` c++
+class Text : public Book {
+    string topic;
+public:
+    Text(string title, string author, int length, string topic) :
+        Book {title, author, length},  // step 2
+        topic {topic}  // step 3
+    {}  // step 4
+    ...
+};
+```
+
+Good reasons to keep superclass fields inaccessible to subclasses
+
+If you want to give subclasses access to certain members, use `protected` visibility
+
+``` c++
+class Book {
+protected:
+    // accessible to Book itself & its subclasses 
+    // and to no one else (ie: outsider/instance can't call protected fields/methods)
+    string title, author;
+    int length;
+public:
+    ...
+};
+```
+
+``` c++
+class text : public Book {
+    string topic;
+public:
+    ...
+    void addAuthor(string newAuthor) {
+        // this is OK
+        author += newAuthor;
+    }
+};
+```
+**NOT** a good idea to give subclasses access to superclass fields with `protected`. This will give subclases access to modify fields of parentclass without any restriction. This is a BAD idea.
+
+Better:
+make fields private, but provide protected accessor methods
+
+``` c++
+class Book {
+    string title, author;
+    int length;
+protected:
+    string getTitle() const;
+    void setAuthor(string newAuthor);
+public:
+    Book(...);
+    bool isHeavy() const;
+};
+```
+
+Relationship among Text, Comic, Book is called "is a"
+- A Text is a Book
+- A Comic is a Book
+
+UML:
+```
+        Book
+         /.\
+          |
+          |
+     ------------
+     |          |
+   Text        Comic
+```
+
+Now consder the method `isHeavy()` - when is a Book heavy?
+- for ordinary Books "> 200 pages"
+- for Texts "> 500 pages"
+- for Comics "> 30 pages" 
+
+For convenience: assume length is protected (or could use protected accessor to get length of parentclass)
+
+``` c++
+class Book {
+    ...
+public:
+    bool isHeavy() const {
+        return length > 200;
+    }
+};
+
+class Text : public Book {
+    ...
+public:
+    bool isHeavy() const {
+        return length > 500;
+    }
+};
+
+class Comic : public Book {
+    ...
+public:
+    bool isHeavy() const {
+        return length > 30;
+    }
+};
+
+
+Book b {"A small book", 60};
+Comic c {"A big comic", 100};
+
+b.isHeavy();  // false
+c.isHeavy();  // true
+```
+
+Since inheritance means "is a", we can do this:
+``` c++
+Book b = Comic {"A big comic", ..., 40, ...};
+```
+
+Q: Is b heavy?  
+ie: `b.isHeavy()` true or false?  
+Which `isHeavy()` runs? `Book::isHeavy()` or `Comic::isHeavy()`?
+
+
+# Lecture 15
+A: No. b is not heavy. `Book::isHeavy()` runs
+
+Why?
+```
+Book            Comic
+- title         - title
+- author        - author
+- length        - length
+                - hero
+```
+
+`Book b = Comic {...};` tries to fit a Comic obj where there is only space for a Book obj. What happens? Comic is sliced - hero field is chopped off, Comic is now a Book.
+
+So `Book b = Comic {...}` creates a Book & `Book::isHeavy()` runs
+
+Slicing happens even if the subclass has the same size as the superclass.
+``` c++
+// always return a ParentClass, all fields & methods belong to ParentClass::
+ParentClass p = ChildClass {...};
+```
+
+---
+
+When accessing objs through ptrs (or refs) slicing is unnecessary and doesn't happen
+
+``` c++
+Comic C {..., ..., 40, ...};
+Book *pb = &c;
+Comic *pc = &c;
+
+pc->isHeavy();  // true
+pb->isHeavy();  // false !!!!!!!!!
+```
+
+and still `Book::isHeavy()` runs when we access `pb->isHeavy()`
+
+Compiler chooses the version of `isHeavy()` based on the type of the ptr (or ref). NOT the actual type of the object.
+
+Same object behaves differently depending on what type of ptr points at it.
+
+## Virtual methods
+How do we make Comic act like a Comic, even when pointed to by a Book ptr?  
+Declare the method `virtual`
+
+``` c++
+class Book {
+    ...
+public:
+    virtual bool isHeavy() const {
+        return length > 200;
+    }
+};
+
+class Comic : public Book {
+    ...
+public:
+    bool isHeavy() const override {
+        return length > 30;
+    }
+};
+
+Comic c {..., ..., 40, ,,,};
+Comic *pc = &c;
+Book *pb = &c;
+Book &rb = c;
+
+pc->isHeavy();  // true
+pb->isHeavy();  // true
+rb.isHeavy();  // true
+// Comic::isHeavy() runs in each case
+```
+
+`override` is only for error checking, it gives compiling error if childclass function signature doesn't match the parentclass fucntion signature. But `override` doesn't have any functional meaning and can be removed. Only `virtual` has functional meaning.
+
+writting `override` method in childclass without `virtual` method in parentclass will result in compiling errors
+
+Virtual methods choose which class' method to run based on the actual type of the object at runtime
+
+ex: my Book collection
+``` c++
+Book *myBooks[20];
+...
+for (int i = 0; i < 20; ++i) {
+    cout << myBooks[i]->isHeavy();
+    // uses Book::isHeavy() for Books
+    // Text::isHeavy() for Texts
+    // Comic::isHeavy() for Comics
+}
+```
+
+Accommodating multiple types under one abstration is called ***polymorphism***
+
+Note: This is why a function `void f(istream &in)` can be passed an ifstream
+
+Consider:
+``` c++
+class A {
+    int x, y;
+};
+
+class B : public A {
+    int z;
+};
+
+void f(A a[]) {
+    a[0] = A {6, 7};
+    a[1] = A{8, 9};
+}
+
+B myArray[2] = {{1, 2, 3}, {4, 5, 6}};
+
+f(myArray);
+```
+
+What happens?
+```
+myArray [[1, 2, 3], [4, 5, 6]]
+a[0] = {6, 7};
+a[1] = {8, 9};
+
+will get
+myArray [[6, 7, 8], [9, 5, 6]]
+```
+Data is misaligned. **Never** use arrays polymorphically
+
+Destructor Revisited
+``` c++
+class X {
+    int *x;
+public:
+    X(int n) : x {new int[n]} {}
+    ~X() {
+        delete[] x;
+    }
+};
+
+class Y : public X {
+    int *y;
+public:
+    Y(int n, int m) : X {n}, y {new int [m]} {}
+    ~Y() {
+        delete[] y;
+    }
+};
+```
+superclass dtor will run automatically, don't need to explicitly delete x. Infact it's wrong to do so, because x is private to X
+
+``` c++
+X *myX = new Y{5, 10};
+delete myXl;
+// leaks the Y data;
+```
+calls ~X, but NOT ~Y. So only x, but NOT y is freed
+
+How can we ensure that deletion through a ptr to the superclass will call the suclass dtor?
+
+Make the dtor virtual!
+``` c++
+class X {
+    ...
+public:
+    ...
+    virtual ~X() {
+        delete[] x;
+    }
+};
+```
+**ALWAYS** make the dtor virtual in classes that are meant to have subclasses - even if the parentclass dtor doesn't do anything
+
+If a class is **not** meant to have subclasses - declare it `final`
+``` c++
+class Y final : public X {
+    ...
+};  // can't inherit from Y
+```
+
+## Pure virtual methods & abstract classes
+
+2 kinds of students: regular & coop
+
+``` c++
+class Student {
+    ...
+public:
+    virtual int fees() const;
+};
+
+class Regular : public Student {
+    ...
+public:
+    // regular students' fees
+    int fees() const override;
+};
+
+class CoOp : public Student {
+    ...
+public:
+    // co-op studens' fees
+    int fees() const override;
+};
+```
+
+What should we put for `Student::fees()`?
+
+Not sure - every Student should be Regular or CoOp
+
+Can explicitly give `Student::fees()` NO implementation
+
+``` c++
+class Student {
+    ...
+public:
+    // Method has no (*, with slightly lies) implementation
+    // called a pure virtual method
+    virtual int fees() const = 0;
+};
+```
+
+A class with a **pure virtual method** CANNOT be instantiated `Student s;` XXXXX
+
+A class like this is called an **abstract class** - purpose is to organize subclasses
+
+Subclasses of an abstract class are also abstract, unless it has an implementation for all pure virtual methods
+
+Non-abstract classes are called **concrete**
+``` c++
+// concrete class
+class Regular : public Student {
+    ...
+public:
+    int fees() const override {
+        return rate * numCourses;
+    }
+};
+```
+
+UML:
+- Virtual & pure virtul methods: italics
+- Abstract classes: class name is italics
