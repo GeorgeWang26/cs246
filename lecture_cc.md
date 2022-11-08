@@ -2527,3 +2527,201 @@ public:
 UML:
 - Virtual & pure virtul methods: italics
 - Abstract classes: class name is italics
+
+
+# Lecture 16
+## Inheritance & Copy/Move
+Recall: pure virtual methods and abstract classes
+
+``` c++
+class Text : public Book {
+    ...
+public:
+    // deos not define copy/move operations
+};
+
+Text t {"Intro to Algorithms", "CLRS", 500000, "CS"};
+Text t2 = t;
+```
+
+no copy ctor in Text ... what happens?
+- calls Book's copy ctor
+- then goes field-by-field (ie: default behaviour) for the Text part
+- same for other operations
+
+To write your own operations:
+``` c++
+Text::Text(const Text &other) : Book {other}, topic {other.topic} {}
+
+Text & Text::operator=(const Text &other) {
+    Book::operator=(other);
+    topic = other.topic;
+    reyurm *this;
+}
+
+Text::Text(Text &&other) : Book {std::move(other)}, topic {std::move(other.topic)} {}
+
+Text & Text::operator=(Text &&other) {
+    Book::operator=(std::move(other));
+    topic = std::move(other.topic);
+    return *this;
+}
+```
+
+**Note:**  
+even though `other` "points" at an rvalue, `other` itself is an lvalue (so is other.topic)  
+`std::move(x)` forces lvalue `x` to be treated as an rvalue, so that the "move" versions of operations run
+
+Operations given above are equivalent to provided default operations - add specialized behaviour as needed
+
+``` c++
+Book *pb1 = new Text {..., "Niklaus Wirth", ..., "Pascal"}, *pb2 = Text {..., "Stroustrap", ..., "C++"};
+```
+What happens if we do `*pb1 = *pb2`?  
+`Book::operator=` runs, only the Book part is copied (*pb1 = {"pb2_field1", "Stroustrap", "pb2_field3", "Pascal"}) - **partial assignment**
+
+How can we fix this?  
+Try making `operator=` virtual
+
+``` c++
+class Book {
+    ...
+public:
+    virtual Book & operator=(const Book &other) {...}
+};
+
+class Text : public Book {
+    ...
+public:
+    Text & operator=(const Text &other) override {...}
+    // override will allow different return type
+    // BUT override will raise compiling error because parameter "const Text" != "const Book"
+};
+```
+
+**Note:**  
+different return types is OK, but **param** types MUST be the same, or it's not an override (and won't compile)
+- violates "is-a"
+
+If we change to `Text & operator=(const Book &other) override {...}` then assignment of a Book obj to a Text var would be allowed
+
+``` c++
+Text t {...};
+Book b {...};
+Comic c {...};
+t = b
+t = c
+
+// uses Book/Comic to assign a Text     BAD (but it compiles)
+```
+
+If `operator=` is non-virtual - partial assignment through base class ptrs  
+If virtual - mixed assignment between Text & Book/Comic  
+Both are BAD
+
+Recommendation: all superclasses should be **abstract**  
+Rewrite Book hierarchy:
+```
+                abstract book
+                     / \
+                      |
+                      |
+     _________________|________________
+    |                 |                |
+normal book         text            comic
+```
+
+`*pb1 = *pb2`
+
+``` c++
+class AbstractBook {
+    string title, author;
+    int length;
+protected:
+    // prevents assignment through base class pts from compiling
+    // but implementration still available to subclasses
+    AbstractBook & operator=(const AbstractBook &other);
+public:
+    AbstractBook(...);
+    virtual ~AbstractBook() = 0;  // Need at least one pure virtual method
+                                  // If don't have one, use the dtor
+};
+
+
+class NormalBook : public AbstractBook {
+public:
+    ...
+    NormalBook & operator=(NormalBook &other) {
+        AbstractBook::operator=(other);
+        return *this;
+    }
+};
+// prevents partial of mixed assignment
+```
+
+Note: virtual dtor **must** be implemented, even though it is pure virtual:
+```
+AbstractBook::~AbstractBook() {}
+```
+
+## Templates
+Huge topic: just the highlights here
+``` c++
+class List {
+    struct Node {
+        int data;
+        Node &next;
+    };
+    Node *thelist;
+};
+```
+
+What if you want to store somehting else? Whole new class? OR a template!  
+Template is a class parameterized by a type
+
+``` c++
+template <typename T> class List {
+    struct Node {
+        T data;
+        Node *next;
+    };
+    Node *thelist;
+public:
+    class Iterator {
+        ...
+    public:
+        T & operator*{
+            return p->data;
+        }
+        ...
+    };
+    T &ith(int i);
+    void addToFront(T n);
+    ...
+};
+```
+
+client:
+``` c++
+List<int> l1;
+List<List<int>> l2;
+
+l1.addToFront(3);
+l2.addToFront(l1);
+
+// for (auto it = l1.begin(); it != l1.end(); ++it) {...}
+for (List<int>::Iterator it = l1.begin(); it != l1.end(); ++it) {
+    cout << *it << endl;
+}
+
+for (auto n : l1) {
+    cout << n << endl;
+}
+```
+
+Compiler specializes templates at the source code level, before compilation.
+
+## The Standard Template Library (STL)
+Large number of useful templates
+
+Eg: dynamic-length arrays: vector
