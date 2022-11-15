@@ -1756,7 +1756,7 @@ int &List::ith(int i) {
 Recall: Only list can create/manipulate Node objects. So we can gurantee the invariant that next is always nullptr or allocated by new.
 
 ## Iterator Pattern
-- Bue for outside user (not in class) we can't traverse the list from node to node, as we would with a linked list (struct Node), because Node is not visible to outside user
+- For outside user (not in class) we can't traverse the list from node to node, as we would with a linked list (struct Node), because Node is not visible to outside user
 - Repeatedly calling ith to access the whole list will result in O(n^2) time
 - But we can't expose the nodes, or we lose encapsulation
 
@@ -1995,14 +1995,11 @@ Embedding one object (Vec) inside another (Basis) is called **composition**
 
 Relationship: A Basis "owns a" Vec (in fact, it owns two of them)
 
-If A "owns a" B, then *typically*:
-- B has no identity outside A (no independent existence)
-- If A is destroyed, B is destroyed
-- If A is copied, B is copied (deep copy)
-
 
 # Lecture 14
-If A "owns a" B, mthen typically:
+
+## Composition
+If A "owns a" B, then *typically*:
 - B has no identity outside of A (no independent existence)
 - If A is destroyed, B is destroyed
 - If A is copied, B is copied (deep copies)
@@ -2433,11 +2430,11 @@ public:
     }
 };
 ```
-superclass dtor will run automatically, don't need to explicitly delete x. Infact it's wrong to do so, because x is private to X
+superclass dtor will run automatically, don't need to explicitly delete x. In fact it's wrong to do so, because x is private to X
 
 ``` c++
 X *myX = new Y{5, 10};
-delete myXl;
+delete myX;
 // leaks the Y data;
 ```
 calls ~X, but NOT ~Y. So only x, but NOT y is freed
@@ -2475,12 +2472,14 @@ public:
     virtual int fees() const;
 };
 
+
 class Regular : public Student {
     ...
 public:
     // regular students' fees
     int fees() const override;
 };
+
 
 class CoOp : public Student {
     ...
@@ -2721,7 +2720,407 @@ for (auto n : l1) {
 
 Compiler specializes templates at the source code level, before compilation.
 
-## The Standard Template Library (STL)
+
+# Lecture 17
+## Standard Template Library (STL)
 Large number of useful templates
 
 Eg: dynamic-length arrays: vector
+
+### Vector
+``` c++
+#include <vector>
+std::vector<int> v {4, 5};  // 4 5
+// Note: vector<int> v (4, 5)  // 5 5 5 5
+v.emplace_back(6);  // 4 5 6
+v.emplace_back(7);  // 4 5 6 7
+
+// Looping over vector
+for (int i = 0; i < v.size(); ++i) {
+    cout << v[i] << endl;
+}
+
+// for (auto it = v.begin(); v != v.end(); ++it)
+for (vector<int>::iterator it = v.begin(); it != v.end(); ++i) {
+    cout << *it << endl;
+}
+
+for (auto n : v) {
+    cout << n << endl;
+}
+
+// To iterate in reverse
+// for (auto it = v.rbegin(); it != v.rend(); ++i)
+for (vector<int>::reverse_iterator it = v.rbegin(); it != v.rend(); ++i) {
+    ...
+}
+```
+
+Use iterator to remove items from inside a vector
+``` c++
+auto it = v.erase(v.begin());  // erases item 0
+it = v.erase(v.begin() + 3);  // erases item 3
+
+// erase() returns an iterator pointing at the first item after erase
+// "it" now point at the new item 3
+
+it = v.erase(it);  // erase the new item 3
+
+it = v.erase(v.end() - 1);  // last item
+```
+
+vector functions:
+- `v.emplace_back()`- similar to `push_back()` but can reduce copying when adding new *object* to vector (google for details)
+- `v.pop_back()` - remove last element
+- `v[i]`
+    - ith element of v
+    - unchecked, if you go out of bounds -> undefined behaviour
+- `v.at(i)` - checked version of `v[i]`
+    - what happens when you go out of bounds?
+
+## Exceptions
+What should happen?
+
+Problem:
+- vector's code can detect the error, but doesn't know what to do about it
+- client knows how to respond, but can't detect the error
+
+
+**C solution**  
+functions return a status code, OR set the global variable `errno`
+- leads to awkward programming (return meaningful value & return status code)
+- encourages programmers to ignore error checks
+- global variable is also bad cuz ALL functions need to remember to always update `errno`
+
+**C++ solution**  
+When an error condition arises, the fucntion *raises an exception*  
+What happens? By default, execution stops
+
+But we can write *handlers* to **catch** exceptions & deal with them
+`vector<T>::at` throws the exception `std::out_of_range` when it fails. We can handle it as follows
+
+``` c++
+#include <stdexcept>
+...
+try {
+    // code that might throw exceptions goes in a try block
+    cout << v.at(10000);
+} catch (std::out_of_range r) {
+    cerr << "Range error" << r.what() << endl;
+    // what() gives extra info about the problem
+}
+```
+
+Now consider
+``` c++
+void f() {
+    // "f" is the content of .what()
+    throw out_of_range {"f"};
+}
+
+void g() {
+    f();
+}
+
+void h() {
+    g();
+}
+
+int main() {
+    try {
+        h();
+    } catch (out_of_range) {
+        // could leave out "r" if not going to use it
+        ...
+    }
+}
+```
+
+What happens?
+- main calls h
+- h calls g
+- g calls
+- f throws
+
+Control goes back through the call chain (unwinding the stack) until a handler is found. It goes all the way back to main, and main handles the exception. No matching handler in the entire call chain => program terminates.
+
+A handler might do part of the recovery job, ie: execute some corrective code & throw another exception
+``` c++
+try {
+    ...
+} catch (SomeErrorType s) {
+    ...
+    throw SomeOtherError {...};
+}
+```
+
+Or rethrow the same exception
+``` c++
+try {
+    ...
+} catch (SomeErrorType s) {
+    ...
+    throw;
+}
+```
+
+`throw` vs `throw s`
+```
+SomeErrorType
+    / \
+     |
+     |
+SpecialErrorType
+```
+`s` may be a subtype of `SomeErrorType`. So `thow s` throws a new exception of type `SomeErrorType`
+
+`throw` actual type of s retained
+
+A handler can act as a catch-all: `catch (...)` MUST WRITE ... IT'S NOT PLACEHOLDER
+``` c++
+try {
+    ...
+} catch (...) {
+    ...
+}
+```
+
+You can throw anything you want - don't have to throw objects - it can e int, string, ....
+
+Writting your own exceptions
+``` c++
+class BadInput {};
+...
+throw BadInput {};
+```
+
+
+# Lecture 18
+**NEVER** let a dtor throw a exception
+- program will abort **immediately**
+- if you want to let a dtor throw, tag it with `noexcept(false)`
+
+**BUT**
+- if a dtor is running during stack unwinding, while dealing with another exception, and it thows, you now have **two** active, unhandled exceptions & the program **will** abort immediately
+
+Much more on exceptions latter
+
+## Design Patterns ctd
+Guiding principle: program to the interface, not the implementation
+- abstract base classes define the interface
+    - work with base class ptrs & call their methods
+- concrete subclasses can be swapped in&out
+    - abstraction over a variety of behaviours
+
+``` c++
+class List {
+    ...
+public:
+    class Iterator : public AbstractIterator {
+        ...
+    };
+    ...
+};
+
+class AbstractIterator {
+    public:
+    virtual int & operator*() = 0;
+    virtual AbstractIterator &operator++() = 0;
+    virtual bool operator!=(const AbstractIterator &other) const = 0;
+    virtual ~AbstractIterator() {}
+}
+
+class Set {
+    ...
+public:
+    class Iterator : public AbstractIterator {
+        ...
+    };
+    ...
+};
+```
+
+Then you can write code that operates over iterators
+``` c++
+void for_each(AbstractIterator &start, AbstractIterator &finish, int(*f)(int)) {
+    while (start != finish) {
+        f(*start);
+        ++start;
+    }
+}
+```
+
+
+## Decorator Pattern
+Want to enhance an object at runtime - add functionality/features
+
+Eg: Windowing system
+- start with a basic window
+- add a scrollbar
+- add a menu
+
+Want to choose these enhancements at runtime
+
+Decorator Pattern:
+```
+           -----------------
+           |   Component   |
+           -----------------
+           | + operation() |
+           -----------------
+                  / \
+                   |
+                   |
+                   |
+        -------------------------
+        |                       |
+        |                       |
+   ---------------------     
+   | ConcreteComponent |
+   |------------------ |
+   |   +operation()    |
+   ---------------------
+```
+
+**Class Component** - defines the interface - operations your objects will provide  
+**Concrete Component** - implements the interface  
+**Decorators** - all inherit from Decorator, which inherits from Component
+
+Therefore, every decorator **is** a component AND every Decorator **has** a component
+
+Window with scrollbar is a kind of window and has a ptr to the underlying plain window
+
+Window withe scrollbar & menu **is** a window, has a ptr to a window with scrollar, which has a ptr to window
+
+All inherit from Abstract Window, so window methods can be used polymorphically on all of them
+
+Eg:
+```
+pizza
+^
+|
+|
+crust and sauce    (side text: basic pizza is crust and sauce)
+```
+
+``` c++
+// Interface only
+class Pizza {
+public:
+    virtual float price() const = 0;
+    virtual string desc() const = 0;
+    virtual ~pizza() {};
+};
+
+class CrustAndSauce : public Pizza {
+public:
+    float price() const override {return 5.99;}
+    string desc() const override {return "Pizza";}
+}
+```
+
+```
+                pizza 
+                ^
+                |
+                |
+    
+CrustAndSauce               Decorator
+                                ^
+                                |
+                                |
+                Topping   StuffedCrust   DippingSauce
+```
+
+``` c++
+class Decorator : public pizza {
+protected:
+    Pizza *component;
+public:
+    Decorator(Pizza *p) : component {p} {}
+    ~Decorator() {delete component;}
+};
+
+
+class StuffedCrust : public Decorator {
+public:
+    StuffedCrust(Pizza *p) : Decorator {p} {}
+    float price() const override {return component->price() + 2.69;}
+    string desc() const override {return component->desc() + "with stuffed crust";}
+};
+
+
+class Topping : public Decorator {
+    string theTopping;
+public:
+    Topping(string topping, Pizza *p) : Decorator {p}, theTopping {topping} {}
+    float price() const override {return component->price() + 0.75;}
+    string desc() const override {return component->desc() + "with" + theTopping;}
+};
+
+
+Pizza *p1 = new CrustAndSauce;
+p1 = new Topping {"cheese", p1};
+p1 = new Topping {"mushrooms", p1};
+p1 = new StuffedCrust {p1};
+
+cout << p1->desc() << " " << p1->price() << endl;
+delete p1;
+```
+
+
+## Observer Pattern
+Publish-subscribe model  
+One class: publisher/subject - generates data  
+One or more subscriber/observer classes - receive data & react to it
+
+Eg: publisher = spreadsheet cell, observers = graphs. When cells change, graphs update
+
+Can be many different kinds of observer(subscriber) objects - subject(publisher) should not need to know all the details
+
+Observer pattern:
+```
+(side text: code common to all subjects)        
+                            (side text: interface common to all observers)
+subject    0-------------------------------------------------> Observer
++notifyObservers()                                             +notify()
++attach(Observer)
++detach(Observer)
+
+^                                                                   ^
+|                                                                   |
+|                                                                   |
+ConcreteSubject   <-----------------------------------0 ConcreteObserver
++getState()                                                 +notify()
+```
+
+Sequence of method calls:
+1. Subject's state is updated
+2. `Subject::notifyObservers()` - cals each observer's `notify()`
+3. Each observer calls `ConcreteSubject::getState()` to querry the state & reacts accordingly
+
+Example: Horse race  
+**Subject** - publishes winner  
+**Observer** - individual bettors - declare victory when their horse wins
+
+``` c++
+class Subject {
+    vector<Observer *> observers;
+public:
+    void attach(Observer *ob) {observers.emplace_back(ob);}
+    void detach(Observer *ob);  // remove from vector
+    void notifyObservers() {
+        for (auto ob : observers) ob->notify();
+    }
+    virtual ~Subject() = 0;
+}
+
+Subject::~Subject() {}  // .cc file
+
+
+class Observer {
+public:
+    virtual void notify() = 0;
+    virtual ~Observer() {}
+};
+```
