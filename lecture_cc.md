@@ -2918,6 +2918,15 @@ Guiding principle: program to the interface, not the implementation
     - abstraction over a variety of behaviours
 
 ``` c++
+class AbstractIterator {
+public:
+    virtual int & operator*() const = 0;
+    virtual AbstractIterator & operator++() = 0;
+    virtual bool operator!=(const AbstractIterator &other) const = 0;
+    virtual ~AbstractIterator() {}
+}
+
+
 class List {
     ...
 public:
@@ -2927,13 +2936,6 @@ public:
     ...
 };
 
-class AbstractIterator {
-    public:
-    virtual int & operator*() = 0;
-    virtual AbstractIterator &operator++() = 0;
-    virtual bool operator!=(const AbstractIterator &other) const = 0;
-    virtual ~AbstractIterator() {}
-}
 
 class Set {
     ...
@@ -2977,11 +2979,10 @@ Therefore, every decorator **is** a component AND every Decorator **has** a comp
 
 Window with scrollbar is a kind of window and has a ptr to the underlying plain window
 
-Window withe scrollbar & menu **is** a window, has a ptr to a window with scrollar, which has a ptr to window
+Window with scrollbar & menu **is** a window, has a ptr to a window with scrollar, which has a ptr to window
 
 All inherit from Abstract Window, so window methods can be used polymorphically on all of them
 
-Eg:
 <img src="img/lec18-2.png">
 
 ``` c++
@@ -3078,6 +3079,222 @@ Subject::~Subject() {}  // .cc file
 class Observer {
 public:
     virtual void notify() = 0;
-    virtual ~Observer() {}
+    virtual ~Observer() {};
+};
+```
+
+# Lecture 19
+Recall: Observer Pattern
+- class Subject
+- class Observer
+
+``` c++
+class HorseRace : public Subject {
+    ifstream in;  // source of data
+    string lastWinner;
+public:
+    HorseRace(string source) : in {source} {}
+    bool runRace() {return in>>lastWinner;}
+    string getState() {return lastWinner;}
+};
+
+
+class Bettor : public Observer {
+    HorceRace *subject;
+    string name, myHorse;
+public:
+    Bettor(...) : ... {subject->attatch(this)};
+    void notify() override {
+        string winner = subject->getState();
+        if (winner == myHorse) cout << "Win!" << endl;
+        else cout << "Lose" << endl;
+    }
+    ~Bettor() {subject->detatch(this);}
+};
+
+
+int main() {
+    HorseRace hr;
+    Bettor Larry{&hr, "Larry", "RunsLikeACow"};
+    // ...  (other bettors)
+    while (hr.runRace()) {
+        hr.notifyObservers();
+    }
+}
+```
+
+## Factory Method Pattern
+Write a video game with 2 kinds of enemies: turtles & bullets
+- system randomly sends turtles & bullets, but bullets are more frequent in harder levels
+- Never know exactly which enemy comes next, so can't call ctors directly
+- Instead, put a **factory method** in Level that cretes enemies
+
+<img src="img/lec19-1.png">
+
+``` c++
+class Level {
+public:
+    // factory method
+    virtual Enemy *createEnemy() = 0;
+    ...
+};
+
+
+class Easy : public Level {
+public:
+    Enemy *createEnemy() override {
+        // create mostly turtles
+    }
+};
+
+
+class Hard : public Level {
+public:
+    Enemy *createEnemy() override {
+        // mostly bullets
+    }
+};
+
+
+Level *l = new Easy;
+Enemy *e = l->createEnemy();
+```
+
+## Template Method Pattern
+want subclasses to override superclass behaviour, but some aspects must stay the same
+
+Eg: There are red turtles & green turtles
+``` c++
+class Turtle {
+public:
+    void Draw() {
+        drawHead();
+        drawShell();
+        drawFeet();
+    }
+private:
+    void drawHead() {...}
+    void drawFeet() {...}
+    virtual void drawShell() = 0;
+};
+
+
+class RedTurtle : public Turtle {
+    void drawShell() override { /* draw red shells */ }
+};
+
+
+class GreenTurtle : public Turtle {
+    void drawShell() override { /* draw green shells */ }
+};
+```
+Subclasses can't change the way a turtle is draw (head, shell, feet), but can change the way the shell is drawn
+
+Private methods in parent class can't be called in child class, but can be override from child class!!!
+
+### Generalizaton - The Non-Virtual Interface (NVI) idiom
+A public virtual function is really two things:
+- public: an interface to the client
+    - indicates promised behaviour (purpose statement)
+    - pre/post conditions, class invariants
+- virtual: an interface to subclasses
+    - subclass can replace this with anything
+
+public & virtual conflict with each other. How can a public virtual method ever keep its promises?
+
+**NVI** says: 
+- ***all*** public methods should be non-virtual (except the dtor)
+- ***all*** virtual methods should be private (or at least protected)
+
+public virtual method
+``` c++
+class DigitalMedia {
+public:
+    virtual void play() = 0;
+};
+```
+
+transforms to NVI, can add before/after code
+``` c++
+class DigitalMedia {
+public:
+    void play() {
+        checkCopyright();  // potential behaviour before doPlay()
+        doPlay();
+        playCount++;    // potential behaviour after doPlay()
+    }
+private:
+    virtual void doPlay() = 0;
+};
+```
+
+Generalizes Template Method Pattern - puts ***every*** virtual function inside a template method
+
+## STL Maps - for creating dictionaries
+Implemented using binary search tree, no hashing of keys. So insertion and retrieve is log(n)
+
+E.g: "arrays" that map strings to int
+``` c++
+#include <map>
+
+std::map<string, int> m;
+m["abc"] = 1;
+m["def"] = 4;
+
+cout << m["ghi"] << m["def"]>>;
+// if key not present, it is inserted & value is default-constructed (for ints, 0)
+// m["ghi"] -> 0
+// m["def"] -> 4
+```
+
+map functions:
+- `m.erase("abc")`
+- `if (m.count("def"))` 0 = not found, 1 = found
+
+Iterating over a map => sorted ket order (binary search tree)
+``` c++
+for (auto &p : m) {
+    // fist & second are fields, not function calls
+    cout << p.first << " " << p.second << endl;
+}
+```
+p's type is `std::pair<const string, int>` from `#include <utility>`  
+since p is lvalue reference here, the actual map can be mutated, but only for p.second (value). p.first (key) cannot be mutated since it's const
+
+
+## Visitor Pattern
+For implementing **double dispatch**
+
+virtual methods - chosen based on the actual type (at runtime) of the receiver object
+
+What if you want to choose based on ***two*** objects?
+
+Eg: striking enemies with weapons
+
+<img src="img/lec19-2.png">
+
+Want something like `virtual void (Enemy, Weapon)::strike();` this is daydreaming, NOT C++
+
+If strike is a method of Enemy, choose based on enemy, but not the weapon  
+Similarly, If strike is a method of Weapon, choose based on weapon, but not the enemy
+
+Trick to get dispatch based on both - combination of overriding & overloading
+
+``` c++
+class Enemy {
+public:
+    virtual void beStruckBy(Weapon &w) = 0;
+};
+
+
+class Turtle : public Enemy {
+public:
+    void beStruckBy(Weapon &w) {w.strike(*this);}  // "*this" is turtle
+};
+
+
+class Bullet : public Enemy {
+public:
+    void beStruckBy(Weapon &w) {w.strike(*this);}  // "*this" is bullet
 };
 ```
