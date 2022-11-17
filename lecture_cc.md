@@ -2555,7 +2555,7 @@ Text::Text(const Text &other) : Book {other}, topic {other.topic} {}
 Text & Text::operator=(const Text &other) {
     Book::operator=(other);
     topic = other.topic;
-    reyurm *this;
+    return *this;
 }
 
 Text::Text(Text &&other) : Book {std::move(other)}, topic {std::move(other.topic)} {}
@@ -2573,8 +2573,10 @@ even though `other` "points" at an rvalue, `other` itself is an lvalue (so is ot
 
 Operations given above are equivalent to provided default operations - add specialized behaviour as needed
 
+---
+
 ``` c++
-Book *pb1 = new Text {..., "Niklaus Wirth", ..., "Pascal"}, *pb2 = Text {..., "Stroustrap", ..., "C++"};
+Book *pb1 = new Text {..., "Niklaus Wirth", ..., "Pascal"}, *pb2 = new Text {..., "Stroustrap", ..., "C++"};
 ```
 What happens if we do `*pb1 = *pb2`?  
 `Book::operator=` runs, only the Book part is copied (*pb1 = {"pb2_field1", "Stroustrap", "pb2_field3", "Pascal"}) - **partial assignment**
@@ -2614,11 +2616,11 @@ t = c
 // uses Book/Comic to assign a Text     BAD (but it compiles)
 ```
 
-If `operator=` is non-virtual - partial assignment through base class ptrs  
-If virtual - mixed assignment between Text & Book/Comic  
+If `operator=` is **non-virtual** - partial assignment through base class ptrs (*pb1 = *pb2)  
+If **virtual** - mixed assignment between Text & Book/Comic (t=b, t=c)  
 Both are BAD
 
-Recommendation: all superclasses should be **abstract**  
+Recommendation: all superclasses should be **abstract**, and `operator=` remain non-virtual  
 Rewrite Book hierarchy:
 ```
                 abstract book
@@ -2637,8 +2639,8 @@ class AbstractBook {
     string title, author;
     int length;
 protected:
-    // prevents assignment through base class pts from compiling
-    // but implementration still available to subclasses
+    // prevents assignment through base class ptrs (*pb1 = *pb2) from compiling
+    // but implementation still available to subclasses
     AbstractBook & operator=(const AbstractBook &other);
 public:
     AbstractBook(...);
@@ -2655,10 +2657,13 @@ public:
         return *this;
     }
 };
-// prevents partial of mixed assignment
+
+// prevents partial (*pb1 = *pb2) or mixed (t=b, t=c) assignment
+// prevents partial assignment by making parent class abstract and operator= protected
+// prevents mixed assignment by keeping operator= non-virtual
 ```
 
-Note: virtual dtor **must** be implemented, even though it is pure virtual:
+***Note:*** virtual dtor **must** be implemented, even though it is pure virtual:
 ```
 AbstractBook::~AbstractBook() {}
 ```
@@ -2872,20 +2877,20 @@ SomeErrorType
      |
 SpecialErrorType
 ```
-`s` may be a subtype of `SomeErrorType`. So `thow s` throws a new exception of type `SomeErrorType`
+`s` may be a subtype of `SomeErrorType` (ie: `s` is `SpecialErrorType`)
+- `throw s` throws a new exception of type `SomeErrorType`
+- `throw` actual type of `s` (ie: `SpecialErrorType`) retained
 
-`throw` actual type of s retained
-
-A handler can act as a catch-all: `catch (...)` MUST WRITE ... IT'S NOT PLACEHOLDER
+A handler can act as a catch-all: `catch (...)` MUST WRITE `...` THIS IS NOT PLACEHOLDER
 ``` c++
 try {
-    ...
+    // ...
 } catch (...) {
-    ...
+    // ...
 }
 ```
 
-You can throw anything you want - don't have to throw objects - it can e int, string, ....
+You can throw anything you want - don't have to throw objects - it can be int, string, ....
 
 Writting your own exceptions
 ``` c++
