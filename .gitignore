@@ -1,7 +1,4 @@
 # Ignore everything
-*
-
-# But not these files...
-!.gitignore
-!*.md
-# etc...
+bash_test/*
+cpp_test/*
+todo.txt

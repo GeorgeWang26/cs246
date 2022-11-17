@@ -2962,25 +2962,7 @@ Eg: Windowing system
 Want to choose these enhancements at runtime
 
 Decorator Pattern:
-```
-           -----------------
-           |   Component   |
-           -----------------
-           | + operation() |
-           -----------------
-                  / \
-                   |
-                   |
-                   |
-        -------------------------
-        |                       |
-        |                       |
-   ---------------------     
-   | ConcreteComponent |
-   |------------------ |
-   |   +operation()    |
-   ---------------------
-```
+<img src="img/lec18-1.png">
 
 **Class Component** - defines the interface - operations your objects will provide  
 **Concrete Component** - implements the interface  
@@ -2995,13 +2977,7 @@ Window withe scrollbar & menu **is** a window, has a ptr to a window with scroll
 All inherit from Abstract Window, so window methods can be used polymorphically on all of them
 
 Eg:
-```
-pizza
-^
-|
-|
-crust and sauce    (side text: basic pizza is crust and sauce)
-```
+<img src="img/lec18-2.png">
 
 ``` c++
 // Interface only
@@ -3019,18 +2995,7 @@ public:
 }
 ```
 
-```
-                pizza 
-                ^
-                |
-                |
-    
-CrustAndSauce               Decorator
-                                ^
-                                |
-                                |
-                Topping   StuffedCrust   DippingSauce
-```
+<img src="img/lec18-3.png">
 
 ``` c++
 class Decorator : public pizza {
@@ -3079,20 +3044,7 @@ Eg: publisher = spreadsheet cell, observers = graphs. When cells change, graphs 
 Can be many different kinds of observer(subscriber) objects - subject(publisher) should not need to know all the details
 
 Observer pattern:
-```
-(side text: code common to all subjects)        
-                            (side text: interface common to all observers)
-subject    0-------------------------------------------------> Observer
-+notifyObservers()                                             +notify()
-+attach(Observer)
-+detach(Observer)
-
-^                                                                   ^
-|                                                                   |
-|                                                                   |
-ConcreteSubject   <-----------------------------------0 ConcreteObserver
-+getState()                                                 +notify()
-```
+<img src="img/lec18-4.png">
 
 Sequence of method calls:
 1. Subject's state is updated
