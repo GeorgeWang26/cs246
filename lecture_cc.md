@@ -2008,7 +2008,7 @@ Eg: A car owns its engine. The engine is part of the car
 - destroy the car => destory the engine
 - copy the car => copy the engine
 
-Implementation - typically as composition of calsses
+Implementation - typically as composition of classes
 
 UML Modelling: 
 ```
@@ -3054,7 +3054,7 @@ Observer pattern:
 
 Sequence of method calls:
 1. Subject's state is updated
-2. `Subject::notifyObservers()` - cals each observer's `notify()`
+2. `Subject::notifyObservers()` - calls each observer's `notify()`
 3. Each observer calls `ConcreteSubject::getState()` to querry the state & reacts accordingly
 
 Example: Horse race  
@@ -3094,7 +3094,7 @@ class HorseRace : public Subject {
     string lastWinner;
 public:
     HorseRace(string source) : in {source} {}
-    bool runRace() {return in>>lastWinner;}
+    bool runRace() {return in >> lastWinner;}
     string getState() {return lastWinner;}
 };
 
@@ -3221,7 +3221,7 @@ public:
     void play() {
         checkCopyright();  // potential behaviour before doPlay()
         doPlay();
-        playCount++;    // potential behaviour after doPlay()
+        playCount++;  // potential behaviour after doPlay()
     }
 private:
     virtual void doPlay() = 0;
@@ -3241,7 +3241,7 @@ std::map<string, int> m;
 m["abc"] = 1;
 m["def"] = 4;
 
-cout << m["ghi"] << m["def"]>>;
+cout << m["ghi"] << m["def"];
 // if key not present, it is inserted & value is default-constructed (for ints, 0)
 // m["ghi"] -> 0
 // m["def"] -> 4
@@ -3287,14 +3287,391 @@ public:
 };
 
 
-class Turtle : public Enemy {
+class Turtle: public Enemy {
 public:
     void beStruckBy(Weapon &w) {w.strike(*this);}  // "*this" is turtle
 };
 
 
-class Bullet : public Enemy {
+class Bullet: public Enemy {
 public:
     void beStruckBy(Weapon &w) {w.strike(*this);}  // "*this" is bullet
 };
+```
+
+# Lecture 20
+## Visitor Pattern ctd.
+``` c++
+class Weapon {
+public:
+    virtual void strike(Turtle &t) = 0;
+    virtual void strike(Bullet &b) = 0;
+};
+
+
+class Stick: public Weapon {
+public:
+    void strike(Turtle &t) override {/* strike Turtle with Stick */}
+    void strike(Bullet &b) override {/* strike Bullet with Stick */}
+};
+
+
+// Rock is skipped
+
+
+Enemy &e = new Bullet{...};
+Weapon *w = new Rock{...};
+e->beStruckBy(*w);  // what happens?
+
+// Bullet::beStrickBy() runs (virtual method dispatch)
+// calls Weapon::strick(), "*this" is type Bullet
+//     so Bullet version of stike chosen (at compile-time)
+// virtual method call resolves to Rock::strike(Bullet &)
+```
+`*this` will give actual type of the object (Bullet), but `*e` will not (will give Enemy)
+
+**HOW ABOUT FUCNTION THAT RETURNS \*THIS so we can always get true type of e look at cpp_test/proof.cc**
+
+Visitor can be used to add functionality to existing classes, without changing or recompiling the classes themselves
+
+Eg: add a visitor to the Book hierarchy
+``` c++
+class Book {
+public:
+    // beStrikeBy
+    virtual void accept(BookVisitor &bv) {
+        // strike
+        bv.visit(*this);
+    }
+};
+
+class Text: public Book {
+public:
+    void accept(BookVisitor &bv) override {
+        bv.visit(*this);
+    }
+};
+// etc.
+
+class BookVisitor {
+public:
+    virtual void visit(Book &b) = 0;
+    virtual void visit(Text &t) = 0;
+    virtual void visit(Comic &c) = 0;
+};
+```
+
+Application: Track how many of each type of Book we have: Books - by author, Texts - by topic, Comics - by hero
+
+Use a `map<string, int>`  
+Could write a virtual method `updateMap()` to each class OR write a visitor
+
+``` c++
+struct Catalogue: public BookVisitor {
+    map<string, int> theCatalogue;
+    void visit(Book &b) {
+        ++theCatalogue[b.getAuthor()];
+    }
+    void visit(Text &t) {
+        ++theCatalogue[t.getText()];
+    }
+    void visit(Comic &c) {
+        ++theCatalogue[c.getHero()];
+    }
+};
+```
+
+But it won't compile! Why?
+- "main" includes "book" includes "book visitor" includes "text" includes "book" (suspended by `#include guard`)
+- circular include dependency. Text doesn't know what Book is
+
+Did we **need** all of those includes?
+
+## Compilation Dependencies
+When does a true compilation dependency exist?  
+Consider: 
+``` c++
+// a.h
+class A {
+    ...
+};
+
+// need to know size of A to know size of B & C
+// b.h
+#include "a.h"
+class B: public A {
+    ...
+};
+
+// c.h
+#include "a.h"
+class C {
+    A a;
+};
+
+// ptrs are all the same size
+// d.h
+class A;
+class D {
+    A *pa;
+};
+
+// just knowing A's existence is good enough for type checking
+// e.h
+class A;
+class E {
+    A f(A a);
+};
+
+// using knowledge of A's interface
+// f.h
+#include "a.h"
+class F {
+    A f(A x) {
+        ...
+        x.g();
+        ...
+    }
+};
+```
+
+If the code doesn't need an include, don't create a needless compilation dependency by including unnecessarily
+
+When class A changes, only A, B, C, F need recompilation
+
+In the **implementation** of D, E:  
+d.cc & e.cc:
+``` c++
+#include "a.h"
+void D::f() {
+    // need to know about class A
+    // a true compilation dependency
+    pa->g();
+}
+```
+Do the include in the .cc file instead of the .h file (when possible)
+
+Now consider the XWindow class (from A4)
+``` c++
+class XWindow {
+    // This is private data. Yet we can look at it.
+    // Do we know what it all means? Do we care?
+    // What if I add or change a private member? All clients must recompile
+    // Would be better to hid these details away
+    Display *d;
+    Window w;
+    int s;
+    GC gc;
+    unsigned long colours[10];
+public:
+    ...
+};
+```
+
+Soln: pimpl idiom ("pointer to implementation"). Create a second class XWindowImpl:
+
+XWindowImpl.h:
+``` c++
+#inlcude <X11/Xlib.h>
+
+struct XWindowImpl {
+    Display *d;
+    Window w;
+    int s;
+    GC gc;
+    unsigned long colours[10];
+};
+```
+
+Window.h:
+``` c++
+class XWindowImpl;
+class XWindow {
+    XWindowImpl *pImpl;
+public:
+    ...  // no change
+};
+```
+- No need to include Xlib.h
+- forward declare the XWindowImpl class
+- No compilation dependency on XWindowImpl.h
+- clients also don't depend on XWindowImpl.h
+
+Note: window.cc depend on XWindowImpl.h
+Window.cc
+``` c++
+#include "Window.h
+#include "XWindowImpl.h"
+
+XWindow::XWindow(...): pImpl {new XWindowImpl} {...}
+```
+Other methods - replace fields d, w, s, etc with pImpl->d, pImpl->w, pImpl->s, etc.
+
+If you keep all private fields in XWindowImpl, then only window.cc needs to recompile if you change XWindow's implementation
+
+# Lecture 21
+## Measures of Design Quality
+- coupling and cohesion
+
+coupling - how much distinct program modules depend on each other  
+
+low:
+- modules communicate via function calls with basic params/results
+- moduels pass arrays/structs back and forth
+- moduels affect each other's control flow  
+
+high: 
+- modules have access to each other's implementation (friends)
+
+high coupling
+- changes to one module require changes to the other module
+- hard to reuse individual modules
+
+
+cohesion - how closely elements of a module are related to each other
+
+low: 
+- arbitrary grouping of unrelated elements (eg. `#include <utility>`)
+- elements share a common theme, otherwise unrelated, maybe share base code (eg. `include <algorithm>`)
+- elements manipulate state over the lifetime of an object (eg. open/read/close files)
+- elements pass data to each other
+
+high:
+- elements cooperate to perform exactly one task
+
+low cohesion
+- poorly organized code
+- hard to understand, reuse
+
+Goal: low coupling, high cohesion
+
+
+## Decoupling the Interface (MVC)
+Your primary program classes should not be printing things
+
+``` c++
+class Chess {
+    ...
+    cout << "Your move";
+    ...
+};
+```
+
+Bad design - inhibits code reuse
+
+What if you want to reuse the ChessBoard, but not have it communicate via stdout?
+
+One solution: give the class stream objects, where it can send it input/output:
+``` c++
+class Chess {
+    istream &in;
+    ostream &out;
+public:
+    ChessBoard(istream &in, ostream &out): in{in}, out{out} {...}
+    ...
+    out << "Your move";
+    ...
+};
+```
+
+Better - but what if you don't want to use streams at all?
+
+Your ChessBoard class should not be doing any communications at all
+
+### Single Responsibility Principle
+A class should only have one reason to change
+- game state & communication are **two** responsibilities
+
+Better: Communicate with the ChessBoard via params/results/exceptions
+- Confine user communication to outside the class
+
+Q: Should main do all the communicaion & then call ChessBoard methods?  
+A: No. It's hard to reuse code if it is in main
+
+Should have a class to manage interactions, that is separate from the game state class
+
+### Architecture: Model-View-Controller (MVC)
+Separate the distinct notions of the data (or state - "model"), the presentation of the data ("view") and the control or manipulation of the data
+
+<img src="img/lec21-1.png">
+
+Model
+- can have multiple views (eg. text and graphics)
+- does not need to know about their details
+- classic Observer Pattern (or communicate through controller)
+
+Controller
+- mediates control flow through model & view
+- might encapsulate turn-taking, or full game results
+- might communicate with the user for unput (or thi could be the view)
+
+- By decoupling presentation & control, MVC promotes reuse
+
+### Exception Safety
+Considers
+``` c++
+void f() {
+    MyClass mc;
+    MyClass *p = new MyClass;
+    g();
+    delete p;
+}
+```
+
+No leaks (at first glance) - but what if g() throws?
+
+What is guranteed?
+- During stack-unwinding, all stack allocated data is cleaned up
+- dtors run, memory reclaimed
+- Heap-allocated memory is not destroyed
+
+So if g() throws, mc is not leaked, but p is
+
+``` c++
+void f() {
+    MyClass mc;
+    MyClass *p = new MyClass;
+    try {
+        g();
+    } catch(...) {
+        delete g();
+        throw;
+    }
+    delete p;
+}
+```
+This is ugly and error-prone, duplication of code
+
+How else can we gurantee that something (eg. delete p) will happen no matter how we exit f (normal or exception)?
+
+In some languages - "finally" clauses that gurantee certain final actions - **not** in C++
+
+Only thing you can count on in C++, dtors for stack-allocateddata will run
+
+Use stack-allocated data with dtors as much as possible - use the gurantee to your advantage
+
+**C++ idion**: RAII - Resource Acquisition Is Initialization
+- Every resource should be wrapped in a stack-allocated object, whose job is to delete it
+
+Eg. fiels
+``` c++
+{
+    istream f {"file"};  // acquiring the resource (file) = initializing f
+    // the file is guranteed to be closed when f is popped from the stack (f's dtor runs)
+}
+```
+
+This can be done with dynamic memory: `class std::unique_ptr<T>` in `#include <memory>`
+- takes a T* in the ctor
+- dtor deletes the ptr
+- in between - dereference, just like a pyr
+
+``` c++
+void f() {
+    MyClass mc;
+    unique_ptr<MyClass> p {new MyClass};
+    // OR auto p = std::make_unique<MyClass>(ctor args);
+    g();
+    // No leaks guranteed
+}
 ```
