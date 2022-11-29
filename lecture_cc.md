@@ -3675,3 +3675,182 @@ void f() {
     // No leaks guranteed
 }
 ```
+
+
+# Lecture 22
+Recall:
+``` c++
+void f() {
+    MyClass mc;
+    unique_ptr<MyClass> p {new MyClass};
+    // OR auto p = std::make_unique<MyClass>(ctor args);
+    g();
+    // No leaks guranteed
+}
+```
+
+Difficulty:
+``` c++
+class C {...};
+...
+unique_ptr<C> p {new C {...}};
+unique_ptr<C> q = p;  // wrong
+```
+can't copy a unique_ptr - don't want to delete the same obj twice  
+Copying is disabled for unique_ptrs. They can only be moved
+
+Sample implementation
+``` c++
+template <typename T> class unique_ptr {
+    T *ptr;
+public:
+    explicit unique_ptr (T *p): ptr{ptr} {}
+    ~unique_ptr() {delete ptr;}
+    unique_ptr(const unique_ptr &other) = delete;
+    unique_ptr & operator= (const unique_ptr &other) = delete;
+    unique_ptr(unique_ptr &&other): ptr{other.ptr} {other.ptr = nullptr;}
+    unique_ptr & operator= (unique_ptr &&other) {
+        std::swap(ptr, other.ptr);
+        return *this;
+    }
+    T & operator*() {return *ptr;}
+    T* get() {return ptr;}
+    ...
+};
+```
+
+If you need to be able to copy ptrs, first answer the question of **ownership**
+- Who will own the resource? Who has responsibility for freeing it?
+    - That ptr should be a unique_ptr. All other ptrs should be raw ptrs (can fetch this with `p.get()`)
+
+If there is true shared ownership (ie: any of several ptrs might need to free the resource) - use `std::shared_ptr`
+
+``` c++
+{
+    auto p1 = std::make_shared<MyClass>();
+    if (...) {
+        auto p2 = p1;
+    }  // p2 popped, ptr NOT deleted
+}  // p1 popped, ptr IS deleted
+```
+shared_ptrs maintain a reference count - count of all shared_ptrs pointing at the same obj  
+Memory is freed when count of shared_ptrs pointing to it is about to reach 0
+
+Use the type of ptr that accurately reflects the ptr's ownership role  
+*Dramatically* fewer opportunities for leaks
+
+## Exception safety ctd.
+3 levels of exception safety for a function f:
+1. Basic guarantee - if an exception occurs, the program will still be in some valid state
+    - nothing leaked, no corrupted data structures, all class invariants maintained
+2. Strong guarantee - if an exception is raised while executing f, the state of the program will be as if f had not been called (f is either fully done or not at all, f can never be half-done)
+3. No-throw guarantee - f will never throw or propagate an exception, and will always accomplish its task
+
+Eg:
+``` c++
+class A {...};
+class B {...};
+class C {
+    A a;
+    B b;
+    void f() {
+        // both of these mat throw (strong gurantee)
+        a.g();
+        b.h();
+    }
+};
+```
+Is f exception safe?
+- If a.g() throws, nothing has happened yet, f propagate the exception. OK (strong guarantee)
+- If b.h() throws, effects of g() would have to be undone to offer the strong guarantee
+    - very hard or impossible if g() has non-local side-effects
+
+No, probably not exception safe
+
+Assume g() and h() do not have non-local side-effects  
+Can use copy & swap
+
+``` c++
+class C {
+    ...
+    void f() {
+        // If one of following 4 lines throws, original a & b still intact
+        A atmp = a;
+        B btmp = b;
+        atmp.g();
+        btmp.h();
+        // What if following 2 lines throws? Not exception safe
+        a = atmp;
+        b = btmp;
+    }
+};
+```
+
+Better if the "swap" part of copy assignment  was no-throw. Copying ptrs cannot throw.  
+Soln: pImpl idiom
+
+``` c++
+struct CImpl {
+    A a;
+    B b;
+};
+class C {
+    unique_ptr<CImpl> pImpl;
+    void f() {
+        auto tmp = make_unique<CImpl>(*pImpl);
+        tmp->a.g();
+        rmp->b.h();
+        std::swap(pImpl, tmp);  // no-throw
+    }
+};
+```
+
+If either A::g or B::h offers no exception safety gurantee, then neither can f
+
+## Exception safety of the STL - vectors
+vectors - encapsulate a heap-allocated array
+- follows RAII - when a stack-allocated vector goes out of scope, the internal heap allocated array is freed
+
+``` c++
+void f() {
+    vector<MyClass> v;
+    ...
+}  // v goes out of scope - array is freed, MyClass dtor runs on all objs in the vector
+```
+
+But
+``` c++
+void g() {
+    vector<MyClass*> v;
+    ...
+}
+// array is freed, ptrs don't have dtors, so any objs pointed to by the ptrs are NOT deleted
+// v doesn't know whether the ptrs in the array OWN the objs they point at
+//      if OWNS -> for (auto x : v) delete x;
+```
+
+But
+``` c++
+void g() {
+    vector<unique_ptr<MyClass>> v;
+    ...
+}
+// array is freed, unique ptr dtor runs, so the objs ARE deleted
+// NO explicit deallocation
+```
+
+`vector<T>::emplace_back`
+- offers the strong guarantee
+- if array is full (ie. size == cap)
+    - allocate new array
+    - copy objs over (copy ctor)
+        - if a copy ctor throws
+        - destroy the new array
+        - original still inatct
+        - strong guarantee
+    - swap ptrs (no-throw)
+    - delete the old array (no-throw)
+
+But
+- copy is expensive & the old data will be thrown away
+- `move` instead of `copy`?
