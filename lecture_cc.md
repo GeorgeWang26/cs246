@@ -1622,6 +1622,7 @@ Student::howMany();  // 2
 
 Can access static fields & methods with class name directly `class::field` `class::method()`
 
+
 ---
 midterm cutoff
 ---
@@ -3839,7 +3840,7 @@ void g() {
 // NO explicit deallocation
 ```
 
-`vector<T>::emplace_back`
+`vector<T>::emplace_back()`
 - offers the strong guarantee
 - if array is full (ie. size == cap)
     - allocate new array
@@ -3854,3 +3855,190 @@ void g() {
 But
 - copy is expensive & the old data will be thrown away
 - `move` instead of `copy`?
+
+
+# Lecture 23
+continue with `vector<T>::emplace_back()`, copying is expensive & the old data will be thrown away
+
+move instead of copy?
+- if move ctor throws, can't offer the strong gurantee - original no longer intact
+
+If the move ctor offers the no-throw guarantee, emplace_back() will use the move ctor. Otherwise it uses the copy ctor(slower)
+
+So, your move operations should provide the no-throw guarantee, and you should indicate that they do
+
+``` c++
+class MyClass {
+public:
+    MyClass(MyClass &&other) noexcept {...}
+    MyClass &operator=(MyClass &&other) noexcept {...}
+};
+```
+
+If you know that a function will never throw or propagate an exception, declare it `noexcept`
+
+Facilitates optimization  
+At minimum: move & swap should be `noexcept`
+
+## Casting
+in C:
+``` c
+Node n;
+int *ip = (int*) &n;  // cast - forces to treat a Node* as an int*
+```
+
+C-style casts should be avoided in C++. If you **must** cast, use a C++ cast
+
+There are 4 ways for casting
+
+### static_cast
+For casts with a well defined meaning
+
+double -> int
+``` c++
+double d;
+void f(int x);
+void f(double x);
+f(d);  // double f
+f(static_cast<int>(d));  // int f
+```
+
+superclass ptr -> subclass ptr
+``` c++
+Book *b = new Text{...};
+Text *t = static_cast<Text*>(b);
+t->getTopic();
+```
+You are taking responsibility that b actually points at a Text. "Trust me"
+
+Casting into wrong type will cause **undefined behaviour**!!!
+
+### reinterpret_cast
+Unsafe implementation specific, "weird" conversions
+
+``` c++
+Student s;
+Turtle *t = reinterpret_cast<Turtle*>(&s);
+```
+
+### const_cast
+For converting between const & non-const
+- the ***only*** C++ cast that can "cast away" const
+
+``` c++
+void g(int *p);  // suppose you know that g won't actually mutate *p
+void f(const int *p) {
+    g(const_cast<int*>(p));
+}
+```
+
+```
+|--------------------------|------------------------------------|
+|      const-correct       |      doesn't use const at all      |
+|--------------------------|------------------------------------|
+```
+When integrating two programs (one is const-correct, one doesn't use const at all), use const_cast as a easy solution. Instead of changing everything in the rigth half to const-correct.
+
+### dynamic_cast
+Is it safe to convert a `Book*` to a `Text*`?
+
+``` c++
+Book *pb = new Book{...};
+static_cast<Text*>(pb)->getTopic();  // safe?
+                                     // depends on what pb actually points at
+```
+Better to do a tentative cast - try it and see if it works `Text *pt = dynamic_cast<Text*>(pb);`
+
+If the cast works (ie: *pb really is a Text, or a subclass of Text), pt points at the object  
+If the cast fails, pt will be nullptr
+``` c++
+if (pt) {
+    cout << pt->getTopic();
+} else {
+    cout << "Not a Text";
+}
+```
+
+Why still use static_cast when we have dynamic_cast?  
+Cuz dynamic_cast is expensive and static_cast is pretty much free.
+
+These are operations on raw ptr. Can we do this with smart ptrs?  
+Yes, `static_pointer_cast`, `dynamic_pointer_cast` cast shared_ptrs to shared_ptrs. `const_pointer_cast` and `reinterpret_pointer_cast` also exist, but likely never going to be used.
+
+Why are there no casting for unique_ptr?  
+Cuz then there will be two unique_ptrs pointing to the same object in memory, this is NOT allowed
+
+Consider:
+``` c++
+void whatIsIt(Book *b) {
+    if (dynamic_cast<Text*>(b)) {
+        cout << "Text";
+    } else if (dynamic_cast<Comic*>(b)) {
+        cout << "Comic";
+    } else {
+        cout << "Book";
+    }
+}
+```
+
+Code like this is tightly coupled to the Book class hierarchy & may indicate bad design
+
+Better: use virtual methods or write a visitor
+
+Dynamic casting also works with refs:
+``` c++
+Text t{...};
+Book &b = t;
+Text &t2 = dynamic_cast<Text&>(b);
+// If b "points to" a Text, then t2 is a ref to the same Text
+```
+If not? (No null refs) - throws `std::bad_cast`
+
+Note: dynamic casting only works on classes with at least one virtual method (so compiler can check if two function calls are the same)
+
+With dynamic reference casting, we can "solve" the polymorphic assignment problem
+
+``` c++
+Text & Text::&operator= (const Book &other) {  // virtual in Book
+    // throws std::bad_cast if other is not a Text
+    const Text &textOther = dynamic_cast<const Text*>(other);
+    if (this == &other) return this;
+    Book::operator=(other);
+    topic = textOther.topic;
+    return *this;
+}
+```
+
+## How virtual methods work
+``` c++
+class Vec {
+    int x, y;
+public:
+    int f() {...}
+};
+
+class Vec2 {
+    int x, y;
+public:
+    virtual int f() {...}
+};
+
+// what's the difference?
+// do these look the same in memory?
+Vec v{1, 2};
+Vec2 w{1, 2};
+
+cout << sizeof(v) << ' ' << sizeof(w); // 8 16 ???
+```
+First note: 8 is space for 2 ints
+- No space for f() method
+
+Compiler turns methods into ordinary functions & stores them separately from objs
+
+Recall:
+``` c++
+Book *pb = new Book/Text/Comic;
+pb->isHeavy();
+// If isHeavy() is virtual, choice of which version to run is based on the type of the actual obj
+// which the compiler can't know in advance
+```
