@@ -4042,3 +4042,221 @@ pb->isHeavy();
 // If isHeavy() is virtual, choice of which version to run is based on the type of the actual obj
 // which the compiler can't know in advance
 ```
+
+# Lecture 24
+Recall: How virtual methods work  
+correct is isHeavy must be chosen at run-time
+
+How about
+``` c++
+class C {
+    int x, y;
+    virtual void f();
+    virtual void g();
+    void h();
+    virtual ~C();
+};
+
+```
+
+```
+picture
+```
+
+For each class with virtual methods, the compiler creates a table of function pointers (the vtable)
+
+C (class, not language) objects have an extra ptr (the vptr) that pts to C's vtable
+
+`picture`
+
+Calling a virtual method: (at run time)
+- follor vptr to vtale
+- fetch ptr to actual method from table
+- follow the function ptr & call the function
+
+therefore, virtual function calls leads to a small overhead cost
+
+Also, having >= 1 virtual functions adds a vptr to the obj  
+therefore, classes with virtual methods produces larger objects than if there were no virtual methods => **space cost**
+
+Concretely, how is an object laid out? Compiler-dependent
+
+``` c++
+class A {
+    int a, c;
+    virtual void f();
+};
+
+class B: public A {
+    int b, d;
+};
+```
+
+```
+picture
+```
+so ptr to B looks like a ptr to A, if you ignore the last two fields
+
+
+- also, making it first means it's always in the same place => you can find such that no matter what kind of object you have
+
+## Multiple Inheritance
+A class can inherit from more than one class
+``` c++
+class A {
+    int a;
+};
+
+class B {
+    int b;
+};
+
+class C: public A, public B {
+    void f() {
+        cout << a << ' ' << b;
+    }
+};
+```
+
+```
+picture
+        A      B
+        /\     /\
+        |      |
+        |      |
+        |------|
+            |
+            |
+            C
+```
+
+challenges: Suppose B & C inherit from A
+
+```
+picture
+```
+
+``` c++
+class D: public B, public C {
+public:
+    int d;
+};
+
+D d;
+d.a;  // which a is this? Ambiguous - compiler rejects
+```
+
+Need to specify d.B::a or d.C::a
+
+But if B & C inherit from A, should there be one A part of D or two? By default it's two. Should B::a and C::a be the same or different?
+
+deadly diamond
+```
+picture
+```
+Make A a **virtual bass class** - **virtual inheritance**:
+``` c++
+class B: virtual public A {
+    ...
+};
+
+class C: virtual public A {
+    ...
+};
+```
+
+
+Eg: IO streams
+```
+picture
+ios.base
+ios
+v v
+istream(ifstream, istringstream) ostream(ofstream, ostringstream)
+iostream
+fstream
+stringstream
+```
+
+How will this be laid out:
+```
+piture
+```
+
+What does g++ do?
+```
+picture
+```
+B needs to be laid out so that we can find its A part, but the distance is unknown
+
+Solution: location of the base class object is stored in the vtables
+
+Disgram doesn't look like all of A, B, C, D simultaneously... but slices of it looks like A, B, C, D  
+
+therefore, ptr assignment among A, B, C, D changes the addr stored in the ptr
+``` c++
+D *d = new D;
+A *a = d;  // value of the ptr adjusted by the offset to the A part
+```
+static_cast & dynamic_cast will make this adjustment, reinterpret_cast will not
+
+
+## Template Functions
+``` c++
+template <typename T> T min(T x, T y) {
+    return x < y ? x : y;
+}
+
+int f() {
+    int x = 1, y = 3;
+    int z = min(x, y);  // T is int
+    // Don't have to say min<int>. C++ infers T = int from the types of x & y
+}
+```
+
+can say `max<int>` if you want
+``` c++
+min('a', 'c')  // T = char
+min(1.0, 3.0)  // T = double
+```
+
+For what types T can min be used? For what types T does the body compiler? Any type for which `operator<` is defined
+
+Recall:
+``` c++
+void foreach(AbstractIterator start, AbstractIterator finish, int(*f)(int)) {
+    while (start != finish) {
+        f(*start);
+        ++start;
+    }
+}
+```
+
+Works as long as
+- AbstractIterator supports !=, *, ++
+- f can be called as a function
+- Make these template args
+
+``` c++
+template<typename Iter, typename Fn> void foreach(Iter start, Iter finish, Fn f) {
+    while (start != finish) {
+        f(*start);
+        ++start;
+    }
+}
+```
+
+Now Iter can be **any** type (not just AbstractIterator) that supports !=, ++, * (including raw ptrs)
+
+``` c++
+void f(int n) {
+    cout << n << endl;
+}
+
+int a[] = {1, 2, 3, 4, 5};
+
+foreach(a, a + 5, f);  // prints the array
+```
+
+C++ `<algorithm>` library
+- suite of template functions, many of which work over iterators
