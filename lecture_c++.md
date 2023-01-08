@@ -4059,15 +4059,13 @@ class C {
 
 ```
 
-```
-picture
-```
+<img src="img/lec24-1.png">
 
 For each class with virtual methods, the compiler creates a table of function pointers (the vtable)
 
 C (class, not language) objects have an extra ptr (the vptr) that pts to C's vtable
 
-`picture`
+<img src="img/lec24-2.png">
 
 Calling a virtual method: (at run time)
 - follor vptr to vtale
@@ -4092,9 +4090,8 @@ class B: public A {
 };
 ```
 
-```
-picture
-```
+<img src="img/lec24-3.png">
+
 so ptr to B looks like a ptr to A, if you ignore the last two fields
 
 
@@ -4118,23 +4115,10 @@ class C: public A, public B {
 };
 ```
 
-```
-picture
-        A      B
-        /\     /\
-        |      |
-        |      |
-        |------|
-            |
-            |
-            C
-```
+<img src="img/lec24-4.png">
 
 challenges: Suppose B & C inherit from A
-
-```
-picture
-```
+<img src="img/lec24-5.png">
 
 ``` c++
 class D: public B, public C {
@@ -4151,9 +4135,8 @@ Need to specify d.B::a or d.C::a
 But if B & C inherit from A, should there be one A part of D or two? By default it's two. Should B::a and C::a be the same or different?
 
 deadly diamond
-```
-picture
-```
+<img src="img/lec24-6.png">
+
 Make A a **virtual bass class** - **virtual inheritance**:
 ``` c++
 class B: virtual public A {
@@ -4167,26 +4150,14 @@ class C: virtual public A {
 
 
 Eg: IO streams
-```
-picture
-ios.base
-ios
-v v
-istream(ifstream, istringstream) ostream(ofstream, ostringstream)
-iostream
-fstream
-stringstream
-```
+<img src="img/lec24-7.png">
 
 How will this be laid out:
-```
-piture
-```
+<img src="img/lec24-8.png">
 
 What does g++ do?
-```
-picture
-```
+<img src="img/lec24-9.png">
+
 B needs to be laid out so that we can find its A part, but the distance is unknown
 
 Solution: location of the base class object is stored in the vtables
