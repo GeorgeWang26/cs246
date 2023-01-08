@@ -480,14 +480,14 @@ Mixing these result in undefined bahaviour
 
 ## Return by value/ptr/ref
 ``` c++
-// expensive - n is coped to the caller's stack frame on return
+// expensive - n is copied to the caller's stack frame on return
 Node getMeANode() {
     Node n;
     return n;
 }
 ```
 
-return a ptr (or ref) insted?
+return a ptr (or ref) instead?
 
 ``` c++
 // BAD
@@ -3320,7 +3320,7 @@ public:
 // Rock is skipped
 
 
-Enemy &e = new Bullet{...};
+Enemy *e = new Bullet{...};
 Weapon *w = new Rock{...};
 e->beStruckBy(*w);  // what happens?
 
@@ -3635,7 +3635,7 @@ void f() {
     try {
         g();
     } catch(...) {
-        delete g();
+        delete p;
         throw;
     }
     delete p;
@@ -3647,7 +3647,7 @@ How else can we gurantee that something (eg. delete p) will happen no matter how
 
 In some languages - "finally" clauses that gurantee certain final actions - **not** in C++
 
-Only thing you can count on in C++, dtors for stack-allocateddata will run
+Only thing you can count on in C++, dtors for stack-allocated data will run
 
 Use stack-allocated data with dtors as much as possible - use the gurantee to your advantage
 
@@ -3665,7 +3665,7 @@ Eg. fiels
 This can be done with dynamic memory: `class std::unique_ptr<T>` in `#include <memory>`
 - takes a T* in the ctor
 - dtor deletes the ptr
-- in between - dereference, just like a pyr
+- in between - dereference, just like a ptr
 
 ``` c++
 void f() {
@@ -3850,7 +3850,7 @@ void g() {
         - original still inatct
         - strong guarantee
     - swap ptrs (no-throw)
-    - delete the old array (no-throw)
+    - delete the old array (no-throw, since all dtors are no-throw guranteed)
 
 But
 - copy is expensive & the old data will be thrown away
