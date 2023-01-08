@@ -2970,6 +2970,7 @@ Eg: Windowing system
 Want to choose these enhancements at runtime
 
 Decorator Pattern:
+
 <img src="img/lec18-1.png">
 
 **Class Component** - defines the interface - operations your objects will provide  
@@ -3051,6 +3052,7 @@ Eg: publisher = spreadsheet cell, observers = graphs. When cells change, graphs 
 Can be many different kinds of observer(subscriber) objects - subject(publisher) should not need to know all the details
 
 Observer pattern:
+
 <img src="img/lec18-4.png">
 
 Sequence of method calls:
@@ -4118,6 +4120,7 @@ class C: public A, public B {
 <img src="img/lec24-4.png">
 
 challenges: Suppose B & C inherit from A
+
 <img src="img/lec24-5.png">
 
 ``` c++
@@ -4135,6 +4138,7 @@ Need to specify d.B::a or d.C::a
 But if B & C inherit from A, should there be one A part of D or two? By default it's two. Should B::a and C::a be the same or different?
 
 deadly diamond
+
 <img src="img/lec24-6.png">
 
 Make A a **virtual bass class** - **virtual inheritance**:
@@ -4150,12 +4154,15 @@ class C: virtual public A {
 
 
 Eg: IO streams
+
 <img src="img/lec24-7.png">
 
 How will this be laid out:
+
 <img src="img/lec24-8.png">
 
 What does g++ do?
+
 <img src="img/lec24-9.png">
 
 B needs to be laid out so that we can find its A part, but the distance is unknown
